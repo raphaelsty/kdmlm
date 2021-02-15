@@ -1,3 +1,3 @@
-from trainer import Mlm
+from .mlm_trainer import MlmTrainer
 
-__all__ = ["Mlm"]
+__all__ = ["MlmTrainer"]

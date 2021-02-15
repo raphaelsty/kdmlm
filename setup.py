@@ -18,7 +18,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/raphaelsty/kdmlm",
     packages=setuptools.find_packages(),
-    install_requires=required + ["mkb>=0.0.1"],
+    install_requires=required,
     package_data={
         "kdmlm": [
             "datasets/*.txt",
