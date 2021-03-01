@@ -12,11 +12,16 @@ class Collator(DataCollatorForLanguageModeling):
         super().__init__(tokenizer=tokenizer, mlm=mlm, mlm_probability=mlm_probability)
 
     def __call__(self, examples):
-        # Handle dict or lists with proper padding and conversion to tensor.
-        if isinstance(examples[0], (dict, BatchEncoding)):
-            batch = self.tokenizer.pad(examples, return_tensors="pt")
-        else:
-            batch = {"input_ids": _collate_batch(examples, self.tokenizer)}
+        """Pad input examples and replace masked tokens with [MASK]."""
+        batch = {
+            "input_ids": _collate_batch(
+                [x["input_ids"] for x in examples], self.tokenizer
+            ),
+            "labels": _collate_batch([x["labels"] for x in examples], self.tokenizer),
+            "mask": _collate_batch(
+                [x["mask"] for x in examples], self.tokenizer
+            ).bool(),
+        }
 
         batch["input_ids"], batch["labels"] = self.replace_tokens(
             inputs=batch["input_ids"],
@@ -59,13 +64,6 @@ def _collate_batch(examples, tokenizer):
     are_tensors_same_length = all(x.size(0) == length_of_first for x in examples)
     if are_tensors_same_length:
         return torch.stack(examples, dim=0)
-
-    # If yes, check if we have a `pad_token`.
-    if tokenizer._pad_token is None:
-        raise ValueError(
-            "You are attempting to pad samples but the tokenizer you are using"
-            f" ({tokenizer.__class__.__name__}) does not have a pad token."
-        )
 
     # Creating the full tensor and filling it with our data.
     max_length = max(x.size(0) for x in examples)

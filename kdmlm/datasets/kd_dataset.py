@@ -16,6 +16,7 @@ class KDDataset(Dataset):
     --------
 
     >>> import pathlib
+    >>> from pprint import pprint
 
     >>> from kdmlm import datasets
     >>> from torch.utils.data import DataLoader
@@ -38,8 +39,14 @@ class KDDataset(Dataset):
     ... )
 
     >>> for x in data_loader:
-    ...    print(x)
     ...    break
+
+    >>> assert x['input_ids'][0].shape[0] == x['input_ids'][1].shape[0]
+    >>> assert x['mask'][0].shape[0] == x['mask'][1].shape[0]
+    >>> assert x['labels'][0].shape[0] == x['labels'][1].shape[0]
+
+    >>> assert x['input_ids'][0].shape[0] ==  x['mask'][0].shape[0]
+    >>> assert x['labels'][0].shape[0] == x['mask'][0].shape[0]
 
     """
 
@@ -73,6 +80,8 @@ class KDDataset(Dataset):
         >>> from torch.utils.data import DataLoader
         >>> from transformers import BertTokenizer
 
+        >>> from pprint import pprint
+
         >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
         >>> dataset = datasets.KDDataset(
@@ -88,8 +97,46 @@ class KDDataset(Dataset):
         ...    input_ids = tokenizer.encode(sentence)
         ... )
 
-        >>> x
-        {'mask': [False, True, True, False, False, False, False, False, False, False, False, False, False], 'labels': [-100, 14605, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100], 'input_ids': [101, 14605, 11199, 3765, 2024, 4569, 2000, 3298, 2006, 2413, 4925, 1012, 102]}
+        >>> pprint(x)
+        {'input_ids': [101,
+                    14605,
+                    11199,
+                    3765,
+                    2024,
+                    4569,
+                    2000,
+                    3298,
+                    2006,
+                    2413,
+                    4925,
+                    1012,
+                    102],
+        'labels': [-100,
+                14605,
+                -100,
+                -100,
+                -100,
+                -100,
+                -100,
+                -100,
+                -100,
+                -100,
+                -100,
+                -100,
+                -100],
+        'mask': [False,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False]}
 
         >>> tokenizer.decode(x['input_ids'])
         '[CLS] renault zoe cars are fun to drive on french roads. [SEP]'
