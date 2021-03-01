@@ -45,9 +45,12 @@ class WikiProcess:
 
     """
 
-    def __init__(self, path_folder, sep="|", entities={}):
+    def __init__(self, path_folder, pad=500, sep="|", entities={}):
 
         self.path_folder = path_folder
+        self.pad = pad
+        self.sep = sep
+        self.entities = entities
 
         self.replacements = [
             ("\n \n", ""),
@@ -62,9 +65,6 @@ class WikiProcess:
             ("</a>", "#"),
             ('">', " | "),
         ]
-
-        self.sep = sep
-        self.entities = entities
 
     def read(self):
         """Read files."""
@@ -105,26 +105,35 @@ class WikiProcess:
             for sentence in file.split(". "):
                 yield sentence + "."
 
+    def pad_sentence(self):
+        """Pad sentences with selected maximum model length."""
+        for sentence in self.sentence_segmentation():
+            yield sentence[: self.pad]
+
     def clean_entities(self):
         """Find entities between <a href> </a> html balises and decode them."""
-        for file in self.sentence_segmentation():
+        for sentence in self.pad_sentence():
             found = False
-            for entity in re.findall('(?<=<a href=")(.*?)(?=</a>)', file):
+            for entity in re.findall('(?<=<a href=")(.*?)(?=</a>)', sentence):
                 try:
                     url, id_e = entity.split('">')
                 except:
                     continue
                 clean_url = parse.unquote(url)
                 if clean_url in self.entities:
-                    file = file.replace(
+                    sentence = sentence.replace(
                         f'<a href="{url}">{id_e}</a>',
                         f"{self.sep}{clean_url}{self.sep}",
                     )
                     found = True
                 else:
-                    file = file.replace(f'<a href="{url}">{id_e}</a>', f"{clean_url}")
+                    sentence = sentence.replace(
+                        f'<a href="{url}">{id_e}</a>', f"{clean_url}"
+                    )
             if found:
-                yield file
+                # Some sentence may have been padded on an url. Remove url.
+                sentence = re.sub(r"<|href\S+", "", sentence)
+                yield sentence
 
     def __iter__(self):
         """Yield cleaned document."""
