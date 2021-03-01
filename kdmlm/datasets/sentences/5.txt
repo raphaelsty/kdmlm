@@ -1,0 +1,100 @@
+From the 9th to 14th centuries, alchemical theories faced criticism from a variety of practical Muslim chemists, including Al-Kindi, Abū al-Rayhān al-Bīrūnī, |Avicenna| and Ibn Khaldun.
+Translations of the time included the Turba Philosophorum, and the works of |Avicenna| and al-Razi.
+Likewise, alchemical texts have been attributed to Alberts student |Thomas Aquinas|.
+Renaissance Humanism and Renaissance Neoplatonism guided alchemists away from |physics| to refocus on mankind as the alchemical vessel.
+Although better known for angel summoning, divination, and his role as |astrologer|, cryptographer, and consultant to Elizabeth I of England, Dees alchemical "Monas Hieroglyphica", written in 1564 was his most popular and influential work.
+During the 17th century, a short-lived "supernatural" interpretation of alchemy became popular, including support by fellows of the |Royal Society|: Robert Boyle and Elias Ashmole.
+Michał Sędziwój ("Michał Sędziwój", 1566–1636), a |Poland| alchemist, philosopher, medical doctor and pioneer of chemistry wrote mystical works but is also credited with distilling oxygen in a lab sometime around 1600.
+|Isaac Newton| devoted considerably more of his writing to the study of alchemy (see Isaac Newton's occult studies) than he did to either optics or physics.
+As the language of the alchemists is analyzed, historians are becoming more aware of the intellectual connections between that discipline and other facets of Western cultural history, such as the evolution of science and |philosophy|, the sociology and psychology of the intellectual communities, Kabbalah, spiritualism, Rosicrucianism, and other mystic movements.
+Institutions involved in this research include The Chymistry of Isaac Newton project at |Indiana University|, the |University of Exeter| Centre for the Study of Esotericism (EXESESO), the European Society for the Study of Western Esotericism (ESSWE), and the |University of Amsterdam|s Sub-department for the History of Hermetic Philosophy and Related Currents.
+Today new interpretations of alchemy are still perpetuated, sometimes merging in concepts from |New Age| or radical environmentalism movements.
+Alchemical symbolism has been important in depth and analytical psychology and was revived and popularized from near extinction by the Swiss psychologist |Carl Jung|.
+"Literary alchemy" appears throughout the history of English literature from |William Shakespeare| to <a href="J.%20K.%20Rowling">J.
+In the 14th century, Chaucer began a trend of alchemical satire that can still be seen in recent fantasy works like those of the late Sir |Terry Pratchett|.
+ Astronomer An astronomer is a |scientist| in the field of |astronomy| who focuses their studies on a specific question or field outside the scope of |Earth|.
+They observe astronomical objects such as |star|s, |planet|s, natural satellite, comets and |galaxy| – in either observational astronomy (by analyzing the data) or theoretical astronomy.
+Professional astronomers are highly educated individuals who typically have a |Doctor of Philosophy| in |physics| or astronomy and are employed by research institutions or universities.
+The American Astronomical Society, which is the major organization of professional astronomers in |North America|, has approximately 7,000 members.
+This number includes scientists from other fields such as physics, |geology|, and |engineering|, whose research interests are closely related to astronomy.
+Teletypes were commonly used for the less-expensive computers from |Digital Equipment Corporation|, so these systems had to use the available key and thus the DEL code to erase the previous character.
+|Digital Equipment Corporation| operating systems (OS/8, RT-11, RSX-11, RSTS/E, TOPS-10, etc.) used both characters to mark the end of a line so that the console device (originally Teleprinter) would work.
+When Gary Kildall created CP/M he was inspired by some command line interface conventions used in |Digital Equipment Corporation|s RT-11.
+Until the introduction of PC DOS in 1981, |IBM| had no hand in this because their 1970s operating systems used EBCDIC instead of ASCII and they were oriented toward punch-card input and line printer output on which the concept of carriage return was meaningless.
+|Unix| and Unix-like systems, and Amiga systems, adopted this convention from Multics.
+The original Macintosh OS, Apple DOS, and ProDOS, on the other hand, used carriage return (CR) alone as a line terminator; however, since Apple replaced these operating systems with the Unix-based |macOS| operating system, they now use line feed (LF) as well.
+In C library and |Unix| conventions, the null character is used to terminate text string (computer science); such null-terminated strings can be known in abbreviation as ASCIZ or ASCIIZ, where here Z stands for "zero".
+Other international standards bodies have ratified character encodings such as ISO 646 (1967) that are identical or nearly identical to ASCII, with extensions for characters outside the English alphabet and symbols used outside the United States, such as the symbol for the United Kingdoms |pound sterling| (£).
+|Digital Equipment Corporation| developed the Multinational Character Set (DEC-MCS) for use in the popular VT220 computer terminal as one of the first extensions designed more for international languages than for block graphics.
+In traditional animation, images are drawn or painted by hand on transparent cel to be photographed and exhibited on |film|.
+Other common animation methods apply a stop motion technique to two and three-dimensional objects like cutout animation, |puppet|s or Clay animation.
+Television and |video| are popular electronic animation media that originally were analog and now operate digital media.
+Apart from short films, feature films, television series, animated GIFs and other media dedicated to the display of moving images, animation is also prevalent in |video game|s, motion graphics, user interfaces and |visual effects|.
+In 1928, "Steamboat Willie", featuring |Mickey Mouse| and Minnie Mouse, popularized film with synchronized sound and put |Walt Disney|s studio at the forefront of the animation industry.
+Cartoons</a> Looney Tunes characters like |Daffy Duck| (1937), |Bugs Bunny| (1938/1940), Tweety (1941/1942), Sylvester the Cat (1945), <a href="Wile%20E.%20Coyote%20and%20Road%20Runner">Wile E.
+Coyote and Road Runner</a> (1949), Fleischer Studios/Paramount Cartoon Studios Betty Boop (1930), Popeye#Theatrical animated cartoons (1933), Superman (1940s cartoons) (1941) and Casper the friendly ghost (1945), Metro-Goldwyn-Mayer cartoon studios |Tom and Jerry| (1940) and Droopy, Walter Lantz Productions/Universal Studio Cartoons Woody Woodpecker (1940), Terrytoons/|20th Century Fox|s Mighty Mouse (1942) and |United Artists| Pink Panther (character) (1963).
+In 1937, |Walt Disney Animation Studios| premiered their first animated feature, "Snow White and the Seven Dwarfs (1937 film)", still one of the highest-grossing traditional animation features .
+China, Czechoslovakia / Czech Republic, Italy, France and Belgium were other countries that more than occasionally released feature films, while Japan became a true powerhouse of animation production, with its own recognizable and influential |anime| style of effective limited animation.
+Hanna-Barbera Productions was especially prolific and had huge hit series, such as "|The Flintstones|" (1960–1966) (the first prime time animated series), "|Scooby-Doo|" (since 1969) and Belgian co-production "The Smurfs (TV series)" (1981–1989).
+Quality dwindled until more daring animation surfaced in the late 1980s and in the early 1990s with hit series such as "|The Simpsons|" (since 1989) as part of a "renaissance" of American animation.
+Japanese |anime| TV series became very successful internationally since the 1960s, and European producers looking for affordable cel animators relatively often started co-productions with Japanese studios, resulting in hit series such as "Barbapapa" (The Netherlands/Japan/France 1973–1977), "Vicky the Viking" (Austria/Germany/Japan 1974) and "<a href="Once%20Upon%20a%20Time...">Il était une fois...
+It was produced in a style thats very similar to traditional cel animation on the Computer Animation Production System (CAPS), developed by |The Walt Disney Company| in collaboration with |Pixar| in the late 1980s.
+The so-called 3D style, more often associated with computer animation, has become extremely popular since Pixars "|Toy Story|" (1995), the first computer-animated feature in this style.
+The legendary animation director |Tex Avery| was the producer of the first Raid (insecticide) "Kills Bugs Dead" commercials in 1966, which were very successful for the company.
+While many comic book characters found their way to the screen (which is often the case in Japan, where many manga are adapted into |anime|), original animated characters also commonly appear in comic books and magazines.
+Somewhat similarly, characters and plots for |video game|s (an interactive animation medium) have been derived from films and vice versa.
+While very many animation companies commercially exploit their creations outside moving image media, |The Walt Disney Company| is the best known and most extreme example.
+Since first being licensed for a childrens writing tablet in 1929, their |Mickey Mouse| mascot has been Mickey Mouse#Merchandising, as have many other Disney characters.
+|Disneyland| opened in 1955 and features many attractions that were based on Disneys cartoon characters.
+The original awards for animation were presented by the |Academy of Motion Picture Arts and Sciences| for animated shorts from the year 1932, during the 5th |Academy Awards| function.
+It was won by the film "|Shrek|", produced by |DreamWorks Animation| and Pacific Data Images.
+|Walt Disney Animation Studios| and |Pixar| has produced the most films either to win or be nominated for the award.
+"Up (2009 film)" and "|Toy Story 3|" also received Best Picture nominations after the Academy expanded the number of nominees from five to ten.
+Several other countries have instituted an award for the best-animated feature film as part of their national film awards: Africa Movie Academy Award for Best Animation (since 2008), |BAFTA Award for Best Animated Film| (since 2006), César Award for Best Animated Film (since 2011), Golden Rooster Award for Best Animation (since 1981), Goya Award for Best Animated Film (since 1989), |Japan Academy Prize for Animation of the Year| (since 2007), National Film Award for Best Animated Film (since 2006).
+The list of awardees is as follows: The creation of non-trivial animation works (i.e., longer than a few seconds) has developed as a form of |filmmaking|, with certain unique aspects.
+Thus, animation studios starting with Disney began the practice in the 1930s of maintaining story departments where |storyboard artist|s develop every single scene through storyboards, then handing the film over to the animators only after the production team is satisfied that all the scenes make sense as a whole.
+Traditionally animated films produced with the aid of computer technology include "|The Lion King|" (US, 1994), "|The Prince of Egypt|" (US, 1998), "Akira (1988 film)" (Japan, 1988), "|Spirited Away|" (Japan, 2001), "The Triplets of Belleville" (France, 2003), and "The Secret of Kells" (Irish-French-Belgian, 2009).
+Fully animated films can be made in a variety of styles, from more realistically animated works like those produced by the |Walt Disney Animation Studios| ("The Little Mermaid (1989 film)", "Beauty and the Beast (1991 film)", "Aladdin (1992 Disney film)", "The Lion King") to the more cartoon styles of the <a href="Warner%20Bros.%20Cartoons">Warner Bros.
+Pioneered by the artists at the American studio United Productions of America, limited animation can be used as a method of stylized artistic expression, as in "Gerald McBoing-Boing" (US, 1951), "Yellow Submarine (1968 film)" (UK, 1968), and certain |anime| produced in Japan.
+Rotoscoping is a technique patented by |Max Fleischer| in 1917 where animators trace live-action movement, frame by frame.
+Other examples include "Allegro Non Troppo" (Italy, 1976), "|Who Framed Roger Rabbit|" (US, 1988), "Volere volare" (Italy 1991), "Space Jam" (US, 1996) and "Osmosis Jones" (US, 2001).
+ Apollo Apollo is one of the Twelve Olympians in Ancient Greek religion and Ancient Roman religion and |Greek mythology| and Roman mythology.
+The national divinity of the Greeks, Apollo has been recognized as a god of archery, music and dance, truth and prophecy, healing and diseases, the |Sun| and light, poetry, and more.
+|Plato| in "Cratylus" connects the name with ("apolysis"), "redemption", with ("apolousis"), "purification", and with ("[h]aploun"), "simple", in particular in reference to the Thessalian form of the name, , and finally with ("aeiballon"), "ever-shooting".
+    Apollo was worshipped throughout the |Roman Empire|.
+In archaic period in Greece he was the |prophet|, the oracular god who in older times was connected with "healing".
+In |Greek mythology| Artemis was the leader (, "hegemon") of the nymphs, who had similar functions with the Norse mythology Elf.
+The double-axe, labrys, was the holy symbol of the |Crete| labyrinth.
+|Plato| describes the priestesses of Delphi and Dodona as frenzied women, obsessed by "mania" (, "frenzy"), a Greek word he connected with "mantis" (, "prophet").
+He writes that the Cretan |prophet| Epimenides purified |Athens| after the pollution brought by the Alcmeonidae and that the seers expertise in sacrifices and reform of funeral practices were of great help to Solon in his reform of the Athenian state.
+Homer pictures Apollo on the side of the |Troy|, fighting against the Achaeans (Homer), during the Trojan War.
+The god seems to be related to "Appaliunas", a tutelary god of Wilusa (|Troy|) in Asia Minor, but the word is not complete.
+Some of the earliest temples, especially in |Crete|, do not belong to any Greek order.
+Apollo immediately prophesied that |Troy| would fall at the hands of Aeacuss descendants, the Aeacidae (i.e.
+Aeneas was then taken to Pergamos, a sacred spot in |Troy|, where he was healed.
+|Plato| said that the innate ability of humans to take delight in music, rhythm and harmony is the gift of Apollo and the Muses.
+The contest was judged by the |Muse|s, or the nymphs of Nysa (mythology).
+Cinyras was a ruler of |Cyprus|, who was a friend of Agamemnon.
+When Zeus suggested that Dionysus defeat the Indians in order to earn a place among the gods, Dionysus declared war against the Indians and travelled to |India| along with his army of Bacchantes and satyrs.
+|Prometheus| was the titan who was punished by Zeus for stealing fire.
+They both united on the day the walls of |Troy| were built.
+She bore to Apollo a son, whom Apollo named Ileus, after the city of his birth, Ilion (|Troy|).
+Hecuba was the wife of King Priam of |Troy|, and Apollo had a son with her named Troilus.
+He was a |Sparta|n prince, beautiful and athletic.
+Athena was the principle goddess of |Athens|, Apollo was the principle god of |Sparta|.
+During the |Second Punic War| in 212 BCE, the "Ludi Apollinares" ("Apollonian Games") were instituted in his honor, on the instructions of a prophecy attributed to one Marcius.
+In the time of |Augustus|, who considered himself under the special protection of Apollo and was even said to be his son, his worship developed and he became one of the chief gods of Rome.
+According to Greek tradition, he helped |Crete| or Arcadia (ancient region)n colonists found the city of |Troy|.
+However, this story may reflect a cultural influence which had the reverse direction: Hittites Cuneiform script texts mention an Asia Minor god called "Appaliunas" or "Apalunas" in connection with the city of Wilusa attested in Hittite inscriptions, which is now generally regarded as being identical with the Greek |Troy| by most scholars.
+ In classical Greece, Anaxagoras asserted that a divine reason (mind) gave order to the seeds of the universe, and |Plato| extended the Greek belief of "ideal forms" to his metaphysical theory of "forms" ("ideai", "ideas").
+The formality of their stance seems to be related with the |Egypt|ian precedent, but it was accepted for a good reason.
+In the late 2nd century CE floor mosaic from El Djem, Roman "Thysdrus", he is identifiable as Helios by his effulgent Halo (religious iconography), though now even a gods divine nudity is concealed by his cloak, a mark of increasing conventions of modesty in the later |Roman Empire|.
+The conventions of this representation, head tilted, lips slightly parted, large-eyed, curling Hairstyle in locks grazing the neck, were developed in the 3rd century BCE to depict |Alexander the Great|.
+Percy Bysshe Shelley composed a "Hymn of Apollo" (1820), and the gods instruction of the Muses formed the subject of |Igor Stravinsky|s "Apollon musagète" (1927–1928).
+|Friedrich Nietzsche| argued that a fusion of the two was most desirable.
+|Carl Jung|s Apollo archetype represents what he saw as the disposition in people to over-intellectualise and maintain emotional distance.
+Andre Agassi Andre Kirk Agassi ( ; born April 29, 1970) is an American retired professional |tennis| player and former <a href="List%20of%20ATP%20number%201%20ranked%20singles%20players">world No.
+During the Open Era, Agassi was the first male player to win four Australian Open titles, a record that was later surpassed by |Novak Djokovic| when he won his fifth title in 2015, and then by |Roger Federer| in 2017.
+Agassi is 2nd of five male singles players to achieve the Grand Slam (tennis)#Career Grand Slam in the Open Era after Rod Laver and before Federer, Nadal and Djokovic and fifth of eight in history, the first of two to achieve the Career Golden Slam (Career Grand Slam and Olympic Gold Medal, the other being |Rafael Nadal|), and the only man to win a "Grand Slam (tennis)#Career Super Slam" (all four majors, plus the Olympic gold medal, plus at least one title at the ATP Finals).
+During 1988, he also set the open-era record for most consecutive victories by a male teenager (a record that stood for 17 years until |Rafael Nadal| broke it in 2005).
+The high point for Agassi was winning the mens singles gold medal at the |1996 Summer Olympics| in |Atlanta|, beating Sergi Bruguera of Spain in the final.

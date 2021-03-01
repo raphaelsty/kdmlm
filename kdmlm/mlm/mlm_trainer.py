@@ -30,6 +30,9 @@ class MlmTrainer(Trainer):
         >>> from transformers import LineByLineTextDataset
         >>> from transformers import TrainingArguments
 
+        >>> import torch
+        >>> _ = torch.manual_seed(42)
+
         >>> import pathlib
         >>> path_data = pathlib.Path(__file__).parent.joinpath('./../datasets/rugby.txt')
 
@@ -125,7 +128,6 @@ class MlmTrainer(Trainer):
             student = []
 
             for token_id, bert_id in enumerate(input_id):
-
                 bert_id = bert_id.item()
 
                 if bert_id in self.cosine:

@@ -1,0 +1,148 @@
+import os
+import re
+from urllib import parse
+
+import tqdm
+
+__all__ = ["WikiProcess"]
+
+
+class WikiProcess:
+    """Pipeline to clean wikipedia text.
+
+    Wikipedias data are available following ERNIE pre-processing dataset procedure using:
+    git clone https://github.com/thunlp/ERNIE.git
+    cd ERNIE
+
+    Download Wikidump (warning it's about 19 GB):
+    wget https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2
+
+    Read wikidump:
+    python3 pretrain_data/WikiExtractor.py enwiki-latest-pages-articles.xml.bz2 -o pretrain_data/output -l --min_text_length 100 --filter_disambig_pages -it abbr,b,big --processes 4
+
+    Parameters:
+    -----------
+        path_folder: Data path directory.
+
+    References:
+    1. [ERNIE: Enhanced Language Representation with Informative Entities](https://github.com/thunlp/ERNIE)
+
+    Example:
+
+    >>> from mkb import datasets
+    >>> from kdmlm import utils
+
+    >>> entities = datasets.Fb15k237(pre_compute=False).entities
+
+    >>> wiki = utils.WikiProcess(
+    ...     path_folder = 'pretrain_data/output',
+    ...     entities = entities,
+    ... )
+
+    >>> for file in wiki:
+    ...    print(file)
+    ...    break
+
+    """
+
+    def __init__(self, path_folder, sep="|", entities={}):
+
+        self.path_folder = path_folder
+
+        self.replacements = [
+            ("\n \n", ""),
+            ("\n", ""),
+            ("'", ""),
+            ("<doc> ", ""),
+            # ("%20", "_"),
+        ]
+
+        self.url_replacements = [
+            ('<a href="', ""),
+            ("</a>", "#"),
+            ('">', " | "),
+        ]
+
+        self.sep = sep
+        self.entities = entities
+
+    def read(self):
+        """Read files."""
+        for folder in os.listdir(self.path_folder):
+            for file in os.listdir(os.path.join(self.path_folder, folder)):
+                path_file = os.path.join(self.path_folder, folder, file)
+                try:
+                    with open(path_file) as f:
+                        yield f.readlines()
+                except:
+                    pass
+
+    def join_file(self):
+        """Join list of files."""
+        yield from (" ".join(file) for file in self.read())
+
+    def split_doc(self):
+        """Split documents."""
+        for file in self.join_file():
+            yield from file.split("</doc>")[:-1]
+
+    def remove_doc_id(self):
+        """Remove doc id from dataset."""
+        yield from (
+            re.sub("(?<=<doc)(.*?)(?=>)", "", file) for file in self.split_doc()
+        )
+
+    def make_replacements(self):
+        """Clean documents."""
+        for file in self.remove_doc_id():
+            for key, value in self.replacements:
+                file = file.replace(key, value)
+            yield file
+
+    def sentence_segmentation(self):
+        """Tokenize sentences."""
+        for file in self.make_replacements():
+            for sentence in file.split(". "):
+                yield sentence + "."
+
+    def clean_entities(self):
+        """Find entities between <a href> </a> html balises and decode them."""
+        for file in self.sentence_segmentation():
+            found = False
+            for entity in re.findall('(?<=<a href=")(.*?)(?=</a>)', file):
+                try:
+                    url, id_e = entity.split('">')
+                except:
+                    continue
+                clean_url = parse.unquote(url)
+                if clean_url in self.entities:
+                    file = file.replace(
+                        f'<a href="{url}">{id_e}</a>',
+                        f"{self.sep}{clean_url}{self.sep}",
+                    )
+                    found = True
+                else:
+                    file = file.replace(f'<a href="{url}">{id_e}</a>', f"{clean_url}")
+            if found:
+                yield file
+
+    def __iter__(self):
+        """Yield cleaned document."""
+        yield from self.clean_entities()
+
+    def export(self, folder, size):
+        """Export sentences to txt file in the selected folder."""
+        n_iter = 0
+        batch = []
+        filename = 0
+        for sentence in tqdm.tqdm(self, position=0, desc="Exporting sentences."):
+            n_iter += 1
+            batch.append(sentence)
+            if n_iter == size:
+                # Export processed sentences.
+                open(os.path.join(folder, f"{filename}.txt"), "w").write(
+                    " \n".join(batch)
+                )
+                filename += 1
+                n_iter = 0
+                batch = []

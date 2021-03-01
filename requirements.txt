@@ -1,2 +1,2 @@
 mkb @ git+git://github.com/raphaelsty/mkb@master#egg=mkb
-transformers >= 4.3.2
+transformers == 4.3.2
