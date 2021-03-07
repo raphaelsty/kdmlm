@@ -3,6 +3,8 @@ import tqdm
 from mkb import losses
 from transformers import Trainer
 
+from ..utils.filter import filter_entities
+
 __all__ = ["MlmTrainer"]
 
 
@@ -78,7 +80,7 @@ class MlmTrainer(Trainer):
         data_collator,
         train_dataset,
         tokenizer,
-        kb,
+        train_triplets,
         device="cuda",
         alpha=0.5,
     ):
@@ -92,54 +94,43 @@ class MlmTrainer(Trainer):
         self.device = device
         self.alpha = alpha
 
-        entities = {token: id_token for id_token, token in kb.entities.items()}
+        # Filter entities that are part of a tail
+        self.entities = filter_entities(train=train_triplets)
 
-        self.mapping = {
-            bert_id: entities[token]
-            for token, bert_id in tokenizer.get_vocab().items()
-            if token in entities
+        entities_to_bert = {
+            id_e: tokenizer.decode([tokenizer.encode(e, add_special_tokens=False)[0]])
+            for e, id_e in self.entities.items()
         }
 
-        self.mask = torch.tensor(list(self.mapping.keys()))
-
-        cos = torch.nn.CosineSimilarity(dim=-1, eps=1e-08)
-
-        self.cosine = {
-            bert_id: cos(
-                kb.entity_embedding[kb_id].detach().to(device),
-                kb.entity_embedding.detach()[self.mask].to(device),
-            )
-            for bert_id, kb_id in tqdm.tqdm(
-                self.mapping.items(), desc="Cosine similarities", position=0
-            )
+        mapping_kb_bert = {
+            id_e: tokenizer.encode(e, add_special_tokens=False)[0]
+            for id_e, e in entities_to_bert.items()
         }
+
+        # Entities ID of the knowledge base Kb and Bert ordered.
+        self.entities_kb = torch.tensor(list(mapping_kb_bert.keys()))
+        self.entities_bert = torch.tensor(list(mapping_kb_bert.values()))
 
         self.kl_divergence = losses.KlDivergence()
 
-    def distillation(self, inputs, logits):
+    def distillation(self, logits, kb_logits, labels, student=True):
         """Computes the knowledge distillation loss."""
         loss = 0
+        mask_labels = labels != -100
+        logits = logits[mask_labels]
+        logits = torch.index_select(logits, 1, self.entities_bert)
 
-        # Filter on intersection
-        masked_logits = logits[:, :, self.mask]
+        if student:
 
-        for batch, input_id in enumerate(inputs):
-            teacher = []
-            student = []
+            loss += self.kl_divergence(
+                student_score=logits, teacher_score=kb_logits, T=1
+            )
 
-            for token_id, bert_id in enumerate(input_id):
-                bert_id = bert_id.item()
+        else:
 
-                if bert_id in self.cosine:
-                    teacher.append(self.cosine[bert_id])
-                    student.append(masked_logits[batch][token_id])
-
-            if teacher or student:
-                teacher = torch.stack(teacher, dim=0)
-                student = torch.stack(student, dim=0)
-                loss += self.kl_divergence(
-                    student_score=student, teacher_score=teacher, T=1
-                )
+            loss += self.kl_divergence(
+                student_score=kb_logits, teacher_score=logits, T=1
+            )
 
         return loss
 
@@ -149,15 +140,29 @@ class MlmTrainer(Trainer):
 
         inputs = self._prepare_inputs(inputs)
 
-        loss, outputs = self.compute_loss(model, inputs, return_outputs=True)
-        logits = outputs.logits
+        kb_logits = None
+
+        student = True
+
+        if student:
+
+            loss, outputs = self.compute_loss(model, inputs, return_outputs=True)
+
+        else:
+
+            pass
 
         if self.args.n_gpu > 1:
             loss = loss.mean()
 
-        loss = (1 - self.alpha) * loss + self.alpha * self.distillation(
-            inputs=inputs["input_ids"], logits=logits
+        distillation_loss = self.alpha * self.distillation(
+            logits=outputs.logits,
+            kb_logits=kb_logits,
+            labels=inputs["labels"],
+            student=student,
         )
+
+        loss = (1 - self.alpha) * loss + distillation_loss
 
         loss.backward()
 

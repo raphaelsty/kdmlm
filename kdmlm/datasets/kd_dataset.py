@@ -10,8 +10,10 @@ class KDDataset(Dataset):
 
     Arguments:
     ----------
+        dataset (kdmlm.datasets.LoadDatasetFromFile)
         tokenizer: Bert tokenizer.
         sep (str): Separator to identify entities.
+        entities (dict): Mapping between entities names and entities ids.
 
     Example:
     --------
