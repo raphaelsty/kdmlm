@@ -57,7 +57,7 @@ class WikiProcess:
             ("\n", ""),
             ("'", ""),
             ("<doc> ", ""),
-            # ("%20", "_"),
+            (self.sep, " "),
         ]
 
         self.url_replacements = [
@@ -131,7 +131,7 @@ class WikiProcess:
                         f'<a href="{url}">{id_e}</a>', f"{clean_url}"
                     )
             if found:
-                # Some sentence may have been padded on an url. Remove url.
+                # Some sentence may have been padded on an url. Remove padded url.
                 sentence = re.sub(r"<|href\S+", "", sentence)
                 yield sentence
 
