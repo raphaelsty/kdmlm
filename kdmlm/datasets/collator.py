@@ -29,6 +29,7 @@ class Collator(DataCollatorForLanguageModeling):
                 self.tokenizer,
                 pad_token_id=self.tokenizer.pad_token_id,
             ).bool(),
+            "entity_ids": torch.stack([x["entity_ids"] for x in examples]),
         }
 
         batch["input_ids"], batch["labels"] = self.replace_tokens(

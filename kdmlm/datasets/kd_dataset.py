@@ -1,3 +1,4 @@
+import torch
 from torch.utils.data import Dataset
 
 ___all__ = ["KDDataset"]
@@ -22,13 +23,18 @@ class KDDataset(Dataset):
     >>> from torch.utils.data import DataLoader
     >>> from transformers import BertTokenizer
 
+    >>> from mkb import datasets as mkb_datasets
+
     >>> folder = pathlib.Path(__file__).parent.joinpath('./../datasets/sentences')
 
     >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
+    >>> entities = mkb_datasets.Fb15k237(1, pre_compute=False).entities
+
     >>> dataset = datasets.KDDataset(
     ...     dataset=datasets.LoadFromFolder(folder=folder),
     ...     tokenizer=tokenizer,
+    ...     entities=entities,
     ...     sep='|'
     ... )
 
@@ -48,19 +54,35 @@ class KDDataset(Dataset):
     >>> assert x['input_ids'][0].shape[0] ==  x['mask'][0].shape[0]
     >>> assert x['labels'][0].shape[0] == x['mask'][0].shape[0]
 
+    >>> x['entity_ids']
+    tensor([[7140],
+            [9105]])
+
+    >>> entities = {value: key for key, value in entities.items()}
+
+    >>> entities[7140]
+    'Moscow'
+
+    >>> entities[9105]
+    'Thomas Mann'
+
     """
 
-    def __init__(self, dataset, tokenizer, sep="|"):
+    def __init__(self, dataset, tokenizer, entities, sep="|"):
         self.dataset = dataset
         self.tokenizer = tokenizer
+        self.entities = entities
         self.sep = sep
 
     def __getitem__(self, idx):
         sentence = self.dataset[idx]
+        entity_id = self.entities[sentence.split(self.sep)[1]]
         input_ids = self.tokenizer.encode(sentence)
-        return self.get_mask_labels_ids(
+        data = self.get_mask_labels_ids(
             sentence=self.tokenizer.tokenize(sentence), input_ids=input_ids
         )
+        data["entity_ids"] = torch.tensor([entity_id])
+        return data
 
     def __len__(self):
         return self.dataset.__len__()
@@ -80,6 +102,8 @@ class KDDataset(Dataset):
         >>> from torch.utils.data import DataLoader
         >>> from transformers import BertTokenizer
 
+        >>> from mkb import datasets as mkb_datasets
+
         >>> from pprint import pprint
 
         >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -87,6 +111,7 @@ class KDDataset(Dataset):
         >>> dataset = datasets.KDDataset(
         ...     dataset=[],
         ...     tokenizer=tokenizer,
+        ...     entities=mkb_datasets.Fb15k237(1, pre_compute=False).entities,
         ...     sep='|'
         ... )
 
