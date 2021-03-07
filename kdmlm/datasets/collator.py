@@ -15,11 +15,19 @@ class Collator(DataCollatorForLanguageModeling):
         """Pad input examples and replace masked tokens with [MASK]."""
         batch = {
             "input_ids": _collate_batch(
-                [x["input_ids"] for x in examples], self.tokenizer
+                [x["input_ids"] for x in examples],
+                self.tokenizer,
+                pad_token_id=self.tokenizer.pad_token_id,
             ),
-            "labels": _collate_batch([x["labels"] for x in examples], self.tokenizer),
+            "labels": _collate_batch(
+                [x["labels"] for x in examples],
+                self.tokenizer,
+                pad_token_id=-100,  # -100 correspond to labels that we de not compute.
+            ),
             "mask": _collate_batch(
-                [x["mask"] for x in examples], self.tokenizer
+                [x["mask"] for x in examples],
+                self.tokenizer,
+                pad_token_id=self.tokenizer.pad_token_id,
             ).bool(),
         }
 
@@ -38,6 +46,7 @@ class Collator(DataCollatorForLanguageModeling):
             self.tokenizer.mask_token
         )
 
+        # TODO REPLACE ONLY WITH RANDOM ENTITIES
         # 10% of the time, we replace masked input tokens with random word
         indices_random = (
             torch.bernoulli(torch.full(labels.shape, 0.5)).bool()
@@ -53,7 +62,7 @@ class Collator(DataCollatorForLanguageModeling):
         return inputs, labels
 
 
-def _collate_batch(examples, tokenizer):
+def _collate_batch(examples, tokenizer, pad_token_id):
     """Collate `examples` into a batch, using the information in `tokenizer` for padding if necessary."""
     # Tensorize if necessary.
     if isinstance(examples[0], (list, tuple)):
@@ -67,7 +76,7 @@ def _collate_batch(examples, tokenizer):
 
     # Creating the full tensor and filling it with our data.
     max_length = max(x.size(0) for x in examples)
-    result = examples[0].new_full([len(examples), max_length], tokenizer.pad_token_id)
+    result = examples[0].new_full([len(examples), max_length], pad_token_id)
     for i, example in enumerate(examples):
         if tokenizer.padding_side == "right":
             result[i, : example.shape[0]] = example
