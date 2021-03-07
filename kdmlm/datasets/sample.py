@@ -23,6 +23,4 @@ class Sample(LoadFromFolder):
     """
 
     def __init__(self):
-        super().__init__(
-            pathlib.Path(__file__).parent.joinpath("./../datasets/sentences")
-        )
+        super().__init__(pathlib.Path(__file__).parent.joinpath("sentences"))

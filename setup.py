@@ -19,11 +19,7 @@ setuptools.setup(
     url="https://github.com/raphaelsty/kdmlm",
     packages=setuptools.find_packages(),
     install_requires=required,
-    package_data={
-        "kdmlm": [
-            "datasets/*.txt",
-        ]
-    },
+    package_data={"kdmlm": ["datasets/*.txt", "datasets/sentences/*.txt"]},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
