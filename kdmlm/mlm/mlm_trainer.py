@@ -1,6 +1,9 @@
+import random
+
 import torch
-import tqdm
-from mkb import losses
+from mkb import evaluation as mkb_evaluation
+from mkb import losses as mkb_losses
+from mkb import sampling as mkb_sampling
 from transformers import Trainer
 
 from ..utils.filter import filter_entities
@@ -80,9 +83,12 @@ class MlmTrainer(Trainer):
         data_collator,
         train_dataset,
         tokenizer,
-        train_triplets,
+        negative_sampling_size,
+        kb,
+        kb_model,
         device="cuda",
         alpha=0.5,
+        seed=42,
     ):
         super().__init__(
             model=model,
@@ -95,11 +101,14 @@ class MlmTrainer(Trainer):
         self.alpha = alpha
 
         # Filter entities that are part of a tail
-        self.entities = filter_entities(train=train_triplets)
+        self.triples = filter_entities(train=kb.train)
+        self.kb_model = kb_model
+
+        random.seed(seed)
 
         entities_to_bert = {
             id_e: tokenizer.decode([tokenizer.encode(e, add_special_tokens=False)[0]])
-            for e, id_e in self.entities.items()
+            for e, id_e in kb.entities.items()
         }
 
         mapping_kb_bert = {
@@ -108,10 +117,37 @@ class MlmTrainer(Trainer):
         }
 
         # Entities ID of the knowledge base Kb and Bert ordered.
-        self.entities_kb = torch.tensor(list(mapping_kb_bert.keys()))
-        self.entities_bert = torch.tensor(list(mapping_kb_bert.values()))
+        self.entities_kb = torch.Tensor(list(mapping_kb_bert.keys()))
+        self.entities_bert = torch.Tensor(list(mapping_kb_bert.values()))
 
-        self.kl_divergence = losses.KlDivergence()
+        self.tensor_distillation = torch.stack(
+            [
+                torch.Tensor([0 for _ in range(len(self.entities_kb))]),
+                torch.Tensor([0 for _ in range(len(self.entities_kb))]),
+                torch.Tensor([e for e in self.entities_kb]),  # Distill only tails
+            ],
+            dim=1,
+        )
+
+        # Wether to train bert or kb model.
+        self.n = 0
+
+        self.mkb_losses = mkb_losses.Adversarial()
+        self.kl_divergence = mkb_losses.KlDivergence()
+
+        # Link prediction task
+        self.negative_sampling = mkb_sampling.NegativeSampling(
+            size=negative_sampling_size,
+            train_triples=kb.train,
+            entities=kb.entities,
+            relations=kb.relations,
+            seed=42,
+        )
+
+        self.kb_optimizer = torch.optim.Adam(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=0.00005,
+        )
 
     def distillation(self, logits, kb_logits, labels, student=True):
         """Computes the knowledge distillation loss."""
@@ -139,21 +175,21 @@ class MlmTrainer(Trainer):
         model.train()
 
         inputs = self._prepare_inputs(inputs)
+        tails_tensor = self.get_tensor_distillation(list_tails=inputs["entity_ids"])
 
-        kb_logits = None
-
-        student = True
+        student = self.is_student()
 
         if student:
-
+            model.train()
             loss, outputs = self.compute_loss(model, inputs, return_outputs=True)
+            with torch.no_grad():
+                kb_logits = self.kb_model(tails_tensor)
 
         else:
-
-            pass
-
-        if self.args.n_gpu > 1:
-            loss = loss.mean()
+            model = model.eval()
+            with torch.no_grad():
+                outputs = model(inputs["input_ids"])
+            kb_logits = self.kb_model(tails_tensor)
 
         distillation_loss = self.alpha * self.distillation(
             logits=outputs.logits,
@@ -162,8 +198,50 @@ class MlmTrainer(Trainer):
             student=student,
         )
 
+        if self.args.n_gpu > 1:
+            loss = loss.mean()
+            distillation_loss = distillation_loss.mean()
+
         loss = (1 - self.alpha) * loss + distillation_loss
 
         loss.backward()
 
         return loss.detach()
+
+    def get_tensor_distillation(self, list_tails):
+        """Init tensor to distill the knowledge of the KB."""
+        tail_tensors = []
+
+        for tail in list_tails:
+
+            head, relation, _ = random.choice(self.triples[tail.item()])
+            new_tensor = self.tensor_distillation.clone()
+            new_tensor[:, 0] = head
+            new_tensor[:, 0] = relation
+            tail_tensors.append(new_tensor)
+
+        return torch.stack(tail_tensors)
+
+    def is_student(self):
+        """Wether to train bert or transe."""
+        self.n += 1
+        if self.n % 2 == 0:
+            return False
+        else:
+            return True
+
+    def link_prediction(self, data):
+        """"Method dedicated to link prediction task."""
+        sample = data["sample"].to(self.device)
+        weight = data["weight"].to(self.device)
+        mode = data["mode"]
+
+        negative_sample = self.negative_sampling.generate(sample=sample, mode=mode).to(
+            self.device
+        )
+        positive_score = self.kb_model(sample)
+        negative_score = self.kb_model(
+            sample=sample, negative_sample=negative_sample, mode=mode
+        )
+        loss = self.mkb_losses(positive_score, negative_score, weight)
+        return loss
