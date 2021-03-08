@@ -1,7 +1,7 @@
+import pprint
 import random
 
 import torch
-from mkb import evaluation as mkb_evaluation
 from mkb import losses as mkb_losses
 from mkb import sampling as mkb_sampling
 from transformers import Trainer
@@ -25,8 +25,10 @@ class MlmTrainer(Trainer):
     Example:
 
         >>> from kdmlm import mlm
-        >>> from mkb import datasets
-        >>> from mkb import models
+        >>> from kdmlm import datasets
+
+        >>> from mkb import datasets as mkb_datasets
+        >>> from mkb import models as mkb_models
 
         >>> from transformers import BertTokenizer
         >>> from transformers import BertForMaskedLM
@@ -38,37 +40,37 @@ class MlmTrainer(Trainer):
         >>> import torch
         >>> _ = torch.manual_seed(42)
 
-        >>> import pathlib
-        >>> path_data = pathlib.Path(__file__).parent.joinpath('./../datasets/rugby.txt')
-
         >>> device = 'cpu'
 
         >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         >>> model = BertForMaskedLM.from_pretrained('bert-base-uncased')
 
-        >>> dataset = LineByLineTextDataset(tokenizer=tokenizer, file_path=path_data,
-        ...    block_size=512)
+        >>> kb = mkb_datasets.Fb15k237(1, pre_compute = False)
 
-        >>> data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True,
-        ...    mlm_probability=0.15)
+        >>> train_dataset = datasets.KDDataset(
+        ...     dataset=datasets.Sample(),
+        ...     tokenizer=tokenizer,
+        ...     entities=kb.entities,
+        ...     sep='|'
+        ... )
+
+        >>> data_collator = datasets.Collator(tokenizer=tokenizer)
 
         >>> training_args = TrainingArguments(output_dir = f'./checkpoints',
         ... overwrite_output_dir = True, num_train_epochs = 10,
         ... per_device_train_batch_size = 64, save_steps = 500, save_total_limit = 1,
         ... do_train = True,  do_predict = True)
 
-        >>> kb = datasets.Wn18rrText(1, pre_compute = False)
-
-        >>> kb = models.TransE(entities = kb.entities, relations = kb.relations,
-        ...    hidden_dim = 200, gamma = 8)
-
-        >>> kb.entities = {key: value.split('.')[0] for key, value in kb.entities.items()}
-
-        >>> entities = {value: key for key, value in kb.entities.items()}
+        >>> kb_model = mkb_models.TransE(entities = kb.entities, relations = kb.relations,
+        ...    hidden_dim = 20, gamma = 8)
+        >>> negative_sampling_size = 10
+        >>> alpha = 0.5
 
         >>> mlm_trainer = MlmTrainer(model=model, args=training_args,
-        ...    data_collator=data_collator, train_dataset=dataset, tokenizer=tokenizer,
-        ...    kb=kb, device=device, alpha = 0.5)
+        ...    data_collator=data_collator, train_dataset=train_dataset,
+        ...    tokenizer=tokenizer, kb=kb, kb_model=kb_model,
+        ...    negative_sampling_size=negative_sampling_size, device=device,
+        ...    alpha=alpha, seed = 42)
 
         >>> mlm_trainer.train()
         {'train_runtime': 85.9931, 'train_samples_per_second': 0.116, 'epoch': 10.0}
@@ -117,14 +119,22 @@ class MlmTrainer(Trainer):
         }
 
         # Entities ID of the knowledge base Kb and Bert ordered.
-        self.entities_kb = torch.Tensor(list(mapping_kb_bert.keys()))
-        self.entities_bert = torch.Tensor(list(mapping_kb_bert.values()))
+        self.entities_kb = torch.tensor(list(mapping_kb_bert.keys()), dtype=torch.int64)
+        self.entities_bert = torch.tensor(
+            list(mapping_kb_bert.values()), dtype=torch.int64
+        )
 
         self.tensor_distillation = torch.stack(
             [
-                torch.Tensor([0 for _ in range(len(self.entities_kb))]),
-                torch.Tensor([0 for _ in range(len(self.entities_kb))]),
-                torch.Tensor([e for e in self.entities_kb]),  # Distill only tails
+                torch.tensor(
+                    [0 for _ in range(len(self.entities_kb))], dtype=torch.int64
+                ),
+                torch.tensor(
+                    [0 for _ in range(len(self.entities_kb))], dtype=torch.int64
+                ),
+                torch.tensor(
+                    [e for e in self.entities_kb], dtype=torch.int64
+                ),  # Distill only tails
             ],
             dim=1,
         )
@@ -175,11 +185,12 @@ class MlmTrainer(Trainer):
         """Training step."""
         model.train()
 
+        mask = inputs.pop("mask")
+        entity_ids = inputs.pop("entity_ids")
+
         inputs = self._prepare_inputs(inputs)
 
-        sample_distillation = self.get_sample_tensor_distillation(
-            list_tails=inputs["entity_ids"]
-        )
+        sample_distillation = self.get_sample_tensor_distillation(list_tails=entity_ids)
         sample, distillation = (
             sample_distillation["sample"],
             sample_distillation["distillation"],
@@ -226,13 +237,16 @@ class MlmTrainer(Trainer):
         distillation = []
 
         for tail in list_tails:
-            head, relation, _ = random.choice(self.triples[tail.item()])
+
+            head, relation, _ = random.choice(
+                self.triples[12097]
+            )  # TODO FIX ME REPLACE 12097 PER tail.item()
             new_tensor = self.tensor_distillation.clone()
             new_tensor[:, 0] = head
             new_tensor[:, 0] = relation
 
             distillation.append(new_tensor)
-            sample.append(torch.Tensor([[head, relation, tail]]))
+            sample.append(torch.tensor([[head, relation, tail]], dtype=torch.int64))
 
         return {
             "sample": torch.stack(sample),
@@ -254,6 +268,8 @@ class MlmTrainer(Trainer):
             mode = "head-batch"
         else:
             mode = "tail-batch"
+
+        raise ValueError(sample)
 
         negative_sample = self.negative_sampling.generate(sample=sample, mode=mode).to(
             self.device
