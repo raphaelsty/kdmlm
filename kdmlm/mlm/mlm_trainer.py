@@ -83,9 +83,9 @@ class MlmTrainer(Trainer):
         data_collator,
         train_dataset,
         tokenizer,
-        negative_sampling_size,
         kb,
         kb_model,
+        negative_sampling_size,
         device="cuda",
         alpha=0.5,
         seed=42,
@@ -130,7 +130,8 @@ class MlmTrainer(Trainer):
         )
 
         # Wether to train bert or kb model.
-        self.n = 0
+        self.n_student = 0
+        self.n_mode = 0
 
         self.mkb_losses = mkb_losses.Adversarial()
         self.kl_divergence = mkb_losses.KlDivergence()
@@ -175,7 +176,14 @@ class MlmTrainer(Trainer):
         model.train()
 
         inputs = self._prepare_inputs(inputs)
-        tails_tensor = self.get_tensor_distillation(list_tails=inputs["entity_ids"])
+
+        sample_distillation = self.get_sample_tensor_distillation(
+            list_tails=inputs["entity_ids"]
+        )
+        sample, distillation = (
+            sample_distillation["sample"],
+            sample_distillation["distillation"],
+        )
 
         student = self.is_student()
 
@@ -183,13 +191,15 @@ class MlmTrainer(Trainer):
             model.train()
             loss, outputs = self.compute_loss(model, inputs, return_outputs=True)
             with torch.no_grad():
-                kb_logits = self.kb_model(tails_tensor)
+                kb_logits = self.kb_model(distillation)
 
         else:
             model = model.eval()
             with torch.no_grad():
                 outputs = model(inputs["input_ids"])
-            kb_logits = self.kb_model(tails_tensor)
+
+            loss = self.link_prediction(sample=sample)
+            kb_logits = self.kb_model(distillation)
 
         distillation_loss = self.alpha * self.distillation(
             logits=outputs.logits,
@@ -208,33 +218,42 @@ class MlmTrainer(Trainer):
 
         return loss.detach()
 
-    def get_tensor_distillation(self, list_tails):
-        """Init tensor to distill the knowledge of the KB."""
-        tail_tensors = []
+    def get_sample_tensor_distillation(self, list_tails):
+        """Init tensor to distill the knowledge of the KB. Also return the input sample
+        for the link prediction task.
+        """
+        sample = []
+        distillation = []
 
         for tail in list_tails:
-
             head, relation, _ = random.choice(self.triples[tail.item()])
             new_tensor = self.tensor_distillation.clone()
             new_tensor[:, 0] = head
             new_tensor[:, 0] = relation
-            tail_tensors.append(new_tensor)
 
-        return torch.stack(tail_tensors)
+            distillation.append(new_tensor)
+            sample.append(torch.Tensor([[head, relation, tail]]))
+
+        return {
+            "sample": torch.stack(sample),
+            "distillation": torch.stack(distillation),
+        }
 
     def is_student(self):
         """Wether to train bert or transe."""
-        self.n += 1
-        if self.n % 2 == 0:
+        self.n_student += 1
+        if self.n_student % 2 == 0:
             return False
         else:
             return True
 
-    def link_prediction(self, data):
+    def link_prediction(self, sample):
         """"Method dedicated to link prediction task."""
-        sample = data["sample"].to(self.device)
-        weight = data["weight"].to(self.device)
-        mode = data["mode"]
+        self.n_mode += 1
+        if self.n_mode % 2 == 0:
+            mode = "head-batch"
+        else:
+            mode = "tail-batch"
 
         negative_sample = self.negative_sampling.generate(sample=sample, mode=mode).to(
             self.device
@@ -243,5 +262,7 @@ class MlmTrainer(Trainer):
         negative_score = self.kb_model(
             sample=sample, negative_sample=negative_sample, mode=mode
         )
-        loss = self.mkb_losses(positive_score, negative_score, weight)
+        loss = self.mkb_losses(
+            positive_score, negative_score, weight=1
+        )  # TODO: Add custom weights.
         return loss
