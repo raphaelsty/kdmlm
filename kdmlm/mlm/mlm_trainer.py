@@ -215,13 +215,13 @@ class MlmTrainer(Trainer):
         if student:
 
             with torch.no_grad():
-                kb_scores = self.kb_model(distillation)
+                kb_scores = self.kb_model(distillation.to(self.args.device))
             top_k_scores = self.top_k(teacher_scores=kb_scores, student_scores=logits)
 
         else:
 
             loss = self.link_prediction(sample=sample, mode=mode)
-            kb_scores = self.kb_model(distillation)
+            kb_scores = self.kb_model(distillation.to(self.args.device))
             top_k_scores = self.top_k(teacher_scores=logits, student_scores=kb_scores)
 
         distillation_loss = self.alpha * self.kl_divergence(
