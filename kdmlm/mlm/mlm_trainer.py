@@ -291,15 +291,15 @@ class MlmTrainer(Trainer):
 
     def link_prediction(self, sample, mode):
         """"Method dedicated to link prediction task."""
-        negative_sample = self.negative_sampling.generate(sample=sample, mode=mode).to(
-            self.args.device
-        )
-        sample = sample.to(self.args.device)
+        negative_sample = self.negative_sampling.generate(sample=sample, mode=mode)
 
-        positive_score = self.kb_model(sample)
+        positive_score = self.kb_model(sample.to(self.args.device))
         negative_score = self.kb_model(
-            sample=sample, negative_sample=negative_sample, mode=mode
+            sample=sample,
+            negative_sample=negative_sample.to(self.args.device),
+            mode=mode,
         )
+
         loss = self.mkb_losses(
             positive_score,
             negative_score,
