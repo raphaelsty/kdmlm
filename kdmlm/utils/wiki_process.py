@@ -38,17 +38,21 @@ class WikiProcess:
 
     Consider only entities that are a tail at least once in the KB.
     >>> kb = datasets.Fb15k237(1, pre_compute=False)
-    >>> entities_id = utils.filter_entities(train=kb.train_triples)
-    >>> entities = {e: id_e for e, id_e in kb.entities.items() if id_e in entities_id}
+    >>> filter = utils.filter_entities(train=kb.train_triples)
 
-    >>> wiki = utils.WikiProcess(
-    ...     path_folder = 'pretrain_data/output',
-    ...     entities = entities,
-    ... )
+    >>> entities = {
+    ...    e: id_e for e, id_e in kb.entities.items()
+    ...    if id_e in filter["heads"] or id_e in filter["tails"]
+    ... }
 
-    >>> for file in wiki:
-    ...    print(file)
-    ...    break
+    wiki = utils.WikiProcess(
+        path_folder = 'pretrain_data/output',
+        entities = entities,
+    )
+
+    for file in wiki:
+        print(file)
+        break
 
     """
 
