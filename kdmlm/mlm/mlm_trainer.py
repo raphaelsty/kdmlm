@@ -301,7 +301,9 @@ class MlmTrainer(Trainer):
             sample=sample, negative_sample=negative_sample, mode=mode
         )
         loss = self.mkb_losses(
-            positive_score, negative_score, weight=torch.ones(sample.shape[0])
+            positive_score,
+            negative_score,
+            weight=torch.ones(sample.shape[0]).to(self.args.device),
         )  # TODO: Add custom weights.
         return loss
 
