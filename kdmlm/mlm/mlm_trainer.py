@@ -313,7 +313,9 @@ class MlmTrainer(Trainer):
             :, 0 : self.top_k_size
         ]
 
-        random_index = torch.randint(len(self.entities_kb), (self.n_random_entities,))
+        random_index = torch.randint(
+            len(self.entities_kb), (self.n_random_entities,)
+        ).to(self.args.device)
 
         top_k_teacher = torch.stack(
             [
