@@ -124,10 +124,13 @@ class MlmTrainer(Trainer):
         }
 
         # Entities ID of the knowledge base Kb and Bert ordered.
-        self.entities_kb = torch.tensor(list(mapping_kb_bert.keys()), dtype=torch.int64)
+        self.entities_kb = torch.tensor(
+            list(mapping_kb_bert.keys()), dtype=torch.int64
+        ).to(self.args.device)
+
         self.entities_bert = torch.tensor(
             list(mapping_kb_bert.values()), dtype=torch.int64
-        )
+        ).to(self.args.device)
 
         self.tensor_distillation_tails = torch.stack(
             [
@@ -143,6 +146,7 @@ class MlmTrainer(Trainer):
             ],
             dim=1,
         )
+
         self.tensor_distillation_heads = self.tensor_distillation_tails.clone()
 
         # Wether to train bert or kb model.
