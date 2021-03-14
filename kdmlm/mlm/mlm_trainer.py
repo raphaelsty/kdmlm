@@ -103,7 +103,7 @@ class MlmTrainer(Trainer):
 
         # Filter entities that are part of a tail
         self.triples = filter_entities(train=kb.train)
-        self.kb_model = kb_model
+        self.kb_model = kb_model.to(self.args.device)
 
         self.top_k_size = top_k_size
         self.n_random_entities = n_random_entities
@@ -208,7 +208,9 @@ class MlmTrainer(Trainer):
             with torch.no_grad():
                 outputs = model(inputs["input_ids"])
 
-        logits = self.filter_labels(outputs.logits, inputs["labels"])
+        logits = self.filter_labels(
+            outputs.logits, inputs["labels"].to(self.args.device)
+        )
 
         if student:
 
@@ -304,7 +306,7 @@ class MlmTrainer(Trainer):
         return loss
 
     def top_k(self, teacher_scores, student_scores):
-
+        """Returns top k scores and k' random scores."""
         top_k_index = torch.argsort(teacher_scores, dim=1, descending=True)[
             :, 0 : self.top_k_size
         ]
