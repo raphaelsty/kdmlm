@@ -209,7 +209,7 @@ class MlmTrainer(Trainer):
                 outputs = model(inputs["input_ids"])
 
         logits = self.filter_labels(
-            outputs.logits, inputs["labels"].to(self.args.device)
+            outputs.logits.to(self.args.device), inputs["labels"].to(self.args.device)
         )
 
         if student:
