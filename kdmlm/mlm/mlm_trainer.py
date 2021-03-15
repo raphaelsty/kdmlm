@@ -68,7 +68,7 @@ class MlmTrainer(Trainer):
         ...    data_collator=data_collator, train_dataset=train_dataset,
         ...    tokenizer=tokenizer, kb=kb, kb_model=kb_model,
         ...    negative_sampling_size=negative_sampling_size,
-        ...    alpha=alpha, seed=42, fit_bert = True, fit_kb = True, distill = True)
+        ...    alpha=alpha, seed=42, fit_bert = True, fit_kb = True, distill = False)
 
         >>> mlm_trainer.train()
         {'train_runtime': 351.7002, 'train_samples_per_second': 0.057, 'epoch': 10.0}
@@ -209,7 +209,7 @@ class MlmTrainer(Trainer):
         if student:
             model.train()
             loss, outputs = self.compute_loss(model, inputs, return_outputs=True)
-        elif self.fit_bert:
+        elif self.distill:
             model = model.eval()
             with torch.no_grad():
                 outputs = model(inputs["input_ids"])
@@ -217,7 +217,7 @@ class MlmTrainer(Trainer):
         if not student:
             loss = self.link_prediction(sample=sample, mode=mode)
 
-        if self.fit_bert:
+        if self.distill:
             logits = self.filter_labels(
                 outputs.logits.to(self.args.device),
                 inputs["labels"].to(self.args.device),
