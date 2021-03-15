@@ -264,15 +264,19 @@ class MlmTrainer(Trainer):
             self.step += 1
 
             if (self.step % self.eval_kb_every) == 0:
-                self.kb_evaluation.eval(
+
+                scores_valid = self.kb_evaluation.eval(
                     model=self.kb_model,
                     dataset=self.kb.valid,
                 )
 
-                self.kb_evaluation.eval(
+                scores_test = self.kb_evaluation.eval(
                     model=self.kb_model,
                     dataset=self.kb.test,
                 )
+
+                print(f"Validation: {scores_valid}")
+                print(f"Test: {scores_test}")
 
         return loss.detach()
 
