@@ -56,11 +56,12 @@ class LoadFromFolder(LoadFromFile):
 
     """
 
-    def __init__(self, folder):
+    def __init__(self, folder, sep="|"):
         self.folder = folder
         self.list_files = os.listdir(folder)
         self.call = 0
         self.id_file = 0
+        self.sep = sep
 
         super().__init__(path=os.path.join(self.folder, self.list_files[self.id_file]))
 
@@ -81,9 +82,14 @@ class LoadFromFolder(LoadFromFile):
                 path=os.path.join(self.folder, self.list_files[self.id_file])
             )
 
-        sentence = self.dataset[self.call].replace("\n", "")
-        self.call += 1
-        return sentence
+        for i in range(100):
+            try:
+                sentence = self.dataset[self.call + i].replace("\n", "")
+                entity = sentence.split(self.sep)[1]
+                self.call += 1
+                return sentence, entity
+            except:
+                continue
 
     def __len__(self):
         return self.len_file * len(self.list_files)

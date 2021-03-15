@@ -77,8 +77,8 @@ class KDDataset(Dataset):
         self.sep = sep
 
     def __getitem__(self, idx):
-        sentence = self.dataset[idx]
-        entity_id = self.entities[sentence.split(self.sep)[1]]
+        sentence, entity = self.dataset[idx]
+        entity_id = self.entities[entity]
         input_ids = self.tokenizer.encode(sentence)
         data = self.get_mask_labels_ids(
             sentence=self.tokenizer.tokenize(sentence), input_ids=input_ids

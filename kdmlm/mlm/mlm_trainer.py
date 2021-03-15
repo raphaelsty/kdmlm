@@ -68,7 +68,7 @@ class MlmTrainer(Trainer):
         ...    data_collator=data_collator, train_dataset=train_dataset,
         ...    tokenizer=tokenizer, kb=kb, kb_model=kb_model,
         ...    negative_sampling_size=negative_sampling_size,
-        ...    alpha=alpha, seed=42, fit_kb = False)
+        ...    alpha=alpha, seed=42, fit_bert = True, fit_kb = True, distill = True)
 
         >>> mlm_trainer.train()
         {'train_runtime': 351.7002, 'train_samples_per_second': 0.057, 'epoch': 10.0}
@@ -85,12 +85,15 @@ class MlmTrainer(Trainer):
         kb,
         kb_model,
         negative_sampling_size,
+        kb_evaluation=None,
+        eval_kb_every=None,
         alpha=0.5,
         seed=42,
         top_k_size=10,
         n_random_entities=10,
         fit_bert=True,
         fit_kb=True,
+        distill=True,
     ):
         super().__init__(
             model=model,
@@ -170,6 +173,11 @@ class MlmTrainer(Trainer):
             lr=0.00005,
         )
 
+        self.kb_evaluation = kb_evaluation
+        self.eval_kb_every = eval_kb_every
+        self.step = 0
+        self.distill = distill
+
     def filter_labels(self, logits, labels):
         """Computes the knowledge distillation loss."""
         mask_labels = labels != -100
@@ -197,50 +205,72 @@ class MlmTrainer(Trainer):
 
         student = self.is_student()
 
-        # Fit bert
+        # Fit bert or kb
         if student:
             model.train()
             loss, outputs = self.compute_loss(model, inputs, return_outputs=True)
-
-        else:
-
+        elif self.fit_bert:
             model = model.eval()
             with torch.no_grad():
                 outputs = model(inputs["input_ids"])
 
-        logits = self.filter_labels(
-            outputs.logits.to(self.args.device), inputs["labels"].to(self.args.device)
-        )
+        if not student:
+            loss = self.link_prediction(sample=sample, mode=mode)
 
-        if student:
+        if self.fit_bert:
+            logits = self.filter_labels(
+                outputs.logits.to(self.args.device),
+                inputs["labels"].to(self.args.device),
+            )
+
+        if student and self.distill:
 
             with torch.no_grad():
                 kb_scores = self.kb_model(distillation.to(self.args.device))
-            top_k_scores = self.top_k(teacher_scores=kb_scores, student_scores=logits)
+                top_k_scores = self.top_k(
+                    teacher_scores=kb_scores, student_scores=logits
+                )
 
-        else:
+        elif not student and self.distill:
 
-            loss = self.link_prediction(sample=sample, mode=mode)
             kb_scores = self.kb_model(distillation.to(self.args.device))
             top_k_scores = self.top_k(teacher_scores=logits, student_scores=kb_scores)
 
-        distillation_loss = self.kl_divergence(
-            student_score=top_k_scores["top_k_teacher"],
-            teacher_score=top_k_scores["top_k_student"],
-            T=1,
-        )
+        if self.distill:
+
+            distillation_loss = self.kl_divergence(
+                student_score=top_k_scores["top_k_teacher"],
+                teacher_score=top_k_scores["top_k_student"],
+                T=1,
+            )
 
         if self.args.n_gpu > 1:
             loss = loss.mean()
             distillation_loss = distillation_loss.mean()
 
-        loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
+        if self.distill:
+            loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
+
         loss.backward()
 
         if not student:
-
             self.kb_optimizer.step()
             self.kb_optimizer.zero_grad()
+
+        if self.kb_evaluation is not None:
+
+            self.step += 1
+
+            if (self.step % self.eval_kb_every) == 0:
+                self.kb_evaluation.eval(
+                    model=self.kb_model,
+                    dataset=self.kb.valid,
+                )
+
+                self.kb_evaluation.eval(
+                    model=self.kb_model,
+                    dataset=self.kb.test,
+                )
 
         return loss.detach()
 
