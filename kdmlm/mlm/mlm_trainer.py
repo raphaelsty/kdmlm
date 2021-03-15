@@ -166,7 +166,7 @@ class MlmTrainer(Trainer):
         )
 
         self.kb_optimizer = torch.optim.Adam(
-            filter(lambda p: p.requires_grad, model.parameters()),
+            filter(lambda p: p.requires_grad, self.kb_model.parameters()),
             lr=0.00005,
         )
 
@@ -224,7 +224,7 @@ class MlmTrainer(Trainer):
             kb_scores = self.kb_model(distillation.to(self.args.device))
             top_k_scores = self.top_k(teacher_scores=logits, student_scores=kb_scores)
 
-        distillation_loss = self.alpha * self.kl_divergence(
+        distillation_loss = self.kl_divergence(
             student_score=top_k_scores["top_k_teacher"],
             teacher_score=top_k_scores["top_k_student"],
             T=1,
@@ -234,8 +234,14 @@ class MlmTrainer(Trainer):
             loss = loss.mean()
             distillation_loss = distillation_loss.mean()
 
-        loss = (1 - self.alpha) * loss + distillation_loss
+        loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
         loss.backward()
+
+        if not student:
+
+            self.kb_optimizer.step()
+            self.kb_optimizer.zero_grad()
+
         return loss.detach()
 
     def get_sample_mode_distillation(self, list_entities):
