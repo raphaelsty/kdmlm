@@ -173,6 +173,8 @@ class MlmTrainer(Trainer):
             lr=0.00005,
         )
 
+        self.kb = kb
+
         self.kb_evaluation = kb_evaluation
         self.eval_kb_every = eval_kb_every
         self.step = 0
