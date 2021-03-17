@@ -183,6 +183,14 @@ class MlmTrainer(Trainer):
         self.step = 0
         self.distill = distill
 
+    @staticmethod
+    def print_scores(step, name, scores):
+        print("\n")
+        print(f"{name} - {step}")
+        for key, value in scores.items():
+            print(f"\t{key}: {value:3f}")
+        print("\n")
+
     def filter_labels(self, logits, labels):
         """Computes the knowledge distillation loss."""
         mask_labels = labels != -100
@@ -278,8 +286,8 @@ class MlmTrainer(Trainer):
                     dataset=self.kb.test,
                 )
 
-                print(f"Validation: {scores_valid}")
-                print(f"Test: {scores_test}")
+                print_scores(step=self.step, name="valid", scores=scores_valid)
+                print_scores(step=self.step, name="test", scores=scores_test)
 
         return loss.detach()
 
