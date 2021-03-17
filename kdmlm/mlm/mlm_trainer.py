@@ -286,8 +286,8 @@ class MlmTrainer(Trainer):
                     dataset=self.kb.test,
                 )
 
-                print_scores(step=self.step, name="valid", scores=scores_valid)
-                print_scores(step=self.step, name="test", scores=scores_test)
+                self.print_scores(step=self.step, name="valid", scores=scores_valid)
+                self.print_scores(step=self.step, name="test", scores=scores_test)
 
         return loss.detach()
 
