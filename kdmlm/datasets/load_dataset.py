@@ -49,7 +49,7 @@ class LoadFromFolder(LoadFromFile):
     >>> dataset = datasets.LoadFromFolder(folder=folder)
 
     >>> dataset[2]
-    'At the entrance to the Gerasimov Institute of Cinematography in |Moscow|, there is a monument that includes statues of Tarkovsky, Gennady Shpalikov and Vasily Shukshin.'
+    ('Lincoln is believed to have had depression (mood), |smallpox|, and |malaria|. ', 'smallpox')
 
     >>> for i in range(1000):
     ...    _ = dataset[i]

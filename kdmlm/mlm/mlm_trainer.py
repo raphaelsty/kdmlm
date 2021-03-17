@@ -151,6 +151,9 @@ class MlmTrainer(Trainer):
         )
 
         self.tensor_distillation_heads = self.tensor_distillation_tails.clone()
+        self.tensor_distillation_heads[:, 0] = torch.tensor(
+            [e for e in self.entities_kb], dtype=torch.int64
+        )
 
         # Wether to train bert or kb model.
         self.n_student = 0
@@ -305,9 +308,14 @@ class MlmTrainer(Trainer):
             else:
                 head, relation, tail = random.choice(self.triples[inverse_mode][entity])
 
-            new_tensor = self.tensor_distillation_tails.clone()
-            new_tensor[:, 0] = head
-            new_tensor[:, 0] = relation
+            if mode == "tail":
+                new_tensor = self.tensor_distillation_tails.clone()
+                new_tensor[:, 0] = head
+                new_tensor[:, 1] = relation
+            elif mode == "head":
+                new_tensor = self.tensor_distillation_heads.clone()
+                new_tensor[:, 2] = tail
+                new_tensor[:, 1] = relation
 
             distillation.append(new_tensor)
             sample.append(torch.tensor([head, relation, tail], dtype=torch.int64))

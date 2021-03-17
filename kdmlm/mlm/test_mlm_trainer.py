@@ -26,7 +26,7 @@ def test_mlm_trainer():
     kb = mkb_datasets.Fb15k237(1, pre_compute=False)
 
     dataset = datasets.KDDataset(
-        dataset=["I live in |France|.", "I live in |Spain|."],
+        dataset=[("I live in |France|.", "France"), ("I live in |Spain|.", "Spain")],
         tokenizer=tokenizer,
         entities=kb.entities,
         sep="|",
@@ -58,6 +58,8 @@ def test_mlm_trainer():
     for inputs in data_loader:
         pass
 
+    assert torch.equal(inputs["entity_ids"], torch.tensor([[352], [6726]]))
+
     mlm_trainer = MlmTrainer(
         model=model,
         args=training_args,
@@ -84,31 +86,49 @@ def test_mlm_trainer():
     assert mode == "head-batch"
     assert distillation.shape[0] == 2
     assert distillation.shape[1] == len(kb.entities)
+    assert torch.equal(distillation[0][0], torch.tensor([0, 15, 12837]))
+    assert torch.equal(distillation[1][0], torch.tensor([0, 87, 1959]))
+
+    # Test switch disillation
+    sample_mode_distillation = mlm_trainer.get_sample_mode_distillation(
+        list_entities=inputs["entity_ids"]
+    )
+    sample, mode, distillation = (
+        sample_mode_distillation["sample"],
+        sample_mode_distillation["mode"],
+        sample_mode_distillation["distillation"],
+    )
+
+    assert torch.equal(sample, torch.tensor([[5420, 48, 352], [1461, 13, 6726]]))
+    assert mode == "tail-batch"
+    assert distillation.shape[0] == 2
+    assert distillation.shape[1] == len(kb.entities)
+    assert torch.equal(distillation[0][0], torch.tensor([5420, 48, 0]))
+    assert torch.equal(distillation[1][0], torch.tensor([1461, 13, 0]))
 
     # Test Link prediction:
     loss = mlm_trainer.link_prediction(sample=sample, mode=mode)
-    assert loss.item() == pytest.approx(1.162128)
+    assert loss.item() == pytest.approx(1.177720)
 
     assert tokenizer.decode(inputs["input_ids"][0]) == "[CLS] i live in [MASK]. [SEP]"
-    assert tokenizer.decode(inputs["input_ids"][1]) == "[CLS] i live in spain. [SEP]"
+    assert tokenizer.decode(inputs["input_ids"][1]) == "[CLS] i live in [MASK]. [SEP]"
     inputs = mlm_trainer._prepare_inputs(inputs)
     assert tokenizer.decode(inputs["input_ids"][0]) == "[CLS] i live in [MASK]. [SEP]"
-    assert tokenizer.decode(inputs["input_ids"][1]) == "[CLS] i live in spain. [SEP]"
+    assert tokenizer.decode(inputs["input_ids"][1]) == "[CLS] i live in [MASK]. [SEP]"
 
     # Distillation
     inputs.pop("mask")
     inputs.pop("entity_ids")
     logits = model(inputs["input_ids"]).logits
     kb_logits = mlm_trainer.kb_model(distillation)
-    student = True
 
+    # student = True
     # distillation_loss = mlm_trainer.distillation(
     #    logits=logits,
     #    kb_logits=kb_logits,
     #    labels=inputs["labels"],
     #    student=student,
     # )
-
     # assert distillation_loss.item() == pytest.approx(0.000530, 6)
 
     labels = inputs["labels"]

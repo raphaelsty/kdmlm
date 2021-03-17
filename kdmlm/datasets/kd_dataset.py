@@ -56,17 +56,23 @@ class KDDataset(Dataset):
     >>> assert x['input_ids'][0].shape[0] ==  x['mask'][0].shape[0]
     >>> assert x['labels'][0].shape[0] == x['mask'][0].shape[0]
 
+    >>> tokenizer.decode(x['input_ids'][0])
+    '[CLS] lincoln is believed to have had depression ( mood ), [MASK], and malaria. [SEP] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]'
+
+    >>> tokenizer.decode(x['input_ids'][1])
+    '[CLS] kennedy / a >, and [MASK] [MASK] have been the top - ranked presidents in eight surveys, according to gallup. [SEP]'
+
     >>> x['entity_ids']
-    tensor([[7140],
-            [9105]])
+    tensor([[10908],
+            [10403]])
 
     >>> entities = {value: key for key, value in entities.items()}
 
-    >>> entities[7140]
-    'Moscow'
+    >>> entities[10908]
+    'smallpox'
 
-    >>> entities[9105]
-    'Thomas Mann'
+    >>> entities[10403]
+    'Ronald Reagan'
 
     """
 
