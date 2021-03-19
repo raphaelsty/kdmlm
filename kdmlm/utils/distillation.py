@@ -27,8 +27,8 @@ def distillation_index(tokenizer, entities):
         ...    entities=dataset.entities
         ... )
 
-        >>> tokenizer.decode(entities_bert[0])
-        'd o m i n i c a n'
+        >>> tokenizer.decode([entities_bert[0]])
+        'dominican'
 
         >>> list(dataset.entities.keys())[entities_kb[0]]
         'Dominican Republic'
@@ -42,14 +42,12 @@ def distillation_index(tokenizer, entities):
         id_e: tokenizer.encode(e, add_special_tokens=False)[0]
         for id_e, e in entities_to_bert.items()
     }
-    tensor_entities_kb = torch.tensor(list(mapping_kb_bert.keys()), dtype=torch.int64)
-    tensor_entities_bert = torch.tensor(
-        list(mapping_kb_bert.values()), dtype=torch.int64
-    )
-    return tensor_entities_kb, tensor_entities_bert
+    kb_entities = torch.tensor(list(mapping_kb_bert.keys()), dtype=torch.int64)
+    bert_entities = torch.tensor(list(mapping_kb_bert.values()), dtype=torch.int64)
+    return kb_entities, bert_entities
 
 
-def get_tensor_distillation(tensor_entities):
+def get_tensor_distillation(kb_entities):
     """Get tensors dedicated to distillation.
 
     Example:
@@ -71,14 +69,14 @@ def get_tensor_distillation(tensor_entities):
     """
     heads = torch.stack(
         [
-            torch.tensor([0 for _ in range(len(tensor_entities))], dtype=torch.int64)
+            torch.tensor([0 for _ in range(len(kb_entities))], dtype=torch.int64)
             for _ in range(3)
         ],
         dim=1,
     )
     tails = heads.clone()
-    heads[:, 0] = torch.tensor([e for e in tensor_entities], dtype=torch.int64)
-    tails[:, 2] = torch.tensor([e for e in tensor_entities], dtype=torch.int64)
+    heads[:, 0] = torch.tensor([e for e in kb_entities], dtype=torch.int64)
+    tails[:, 2] = torch.tensor([e for e in kb_entities], dtype=torch.int64)
     return heads, tails
 
 
