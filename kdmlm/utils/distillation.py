@@ -1,6 +1,6 @@
 import torch
 
-__all__ = ["distillation_index", "get_tensor_distillation"]
+__all__ = ["distillation_index", "expand_bert_logits", "get_tensor_distillation"]
 
 
 def distillation_index(tokenizer, entities):
@@ -80,3 +80,33 @@ def get_tensor_distillation(tensor_entities):
     heads[:, 0] = torch.tensor([e for e in tensor_entities], dtype=torch.int64)
     tails[:, 2] = torch.tensor([e for e in tensor_entities], dtype=torch.int64)
     return heads, tails
+
+
+def expand_bert_logits(logits, labels, bert_entities):
+    """Filter bert logits on labels. Extract only logits which have label != 100.
+    Then expand the logits to match with kb outputs logits.
+
+    Parameters:
+    -----------
+        logits (torch.tensor): Output MLM logits of bert.
+        labels (torch.tensor): Ids of the tokens to retrieve.
+        bert_entities (torch.tensor): Tensor of ids of entities.
+
+    Example:
+    --------
+
+        >>> from kdmlm import utils
+        >>> import torch
+
+        >>> logits = torch.tensor([[0.1, 0.3, 0.6], [0.2, 0.2, 0.8]])
+        >>> labels = torch.tensor([-100, 1])
+        >>> bert_entities = torch.tensor([0, 1, 0, 2])
+
+        >>> utils.expand_bert_logits(logits, labels, bert_entities)
+        tensor([[0.2000, 0.2000, 0.2000, 0.8000]])
+
+    """
+    mask_labels = labels != -100
+    logits = logits[mask_labels]
+    logits = torch.index_select(logits, 1, bert_entities)
+    return logits
