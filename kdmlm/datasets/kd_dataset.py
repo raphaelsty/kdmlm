@@ -76,11 +76,12 @@ class KDDataset(Dataset):
 
     """
 
-    def __init__(self, dataset, tokenizer, entities, sep="|"):
+    def __init__(self, dataset, tokenizer, entities, n_masks=None, sep="|"):
         self.dataset = dataset
         self.tokenizer = tokenizer
         self.entities = entities
         self.sep = sep
+        self.n_masks = n_masks
         self.mask_id = self.tokenizer.encode(self.tokenizer.mask_token, add_special_tokens=False)[0]
 
     def __getitem__(self, idx):
@@ -88,7 +89,7 @@ class KDDataset(Dataset):
         entity_id = self.entities[entity]
         input_ids = self.tokenizer.encode(sentence)
         data = self.get_mask_labels_ids(
-            sentence=self.tokenizer.tokenize(sentence), input_ids=input_ids
+            sentence=self.tokenizer.tokenize(sentence), input_ids=input_ids, n_masks=self.n_masks
         )
         data["entity_ids"] = torch.tensor([entity_id])
         return data
