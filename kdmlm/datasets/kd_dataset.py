@@ -81,6 +81,7 @@ class KDDataset(Dataset):
         self.tokenizer = tokenizer
         self.entities = entities
         self.sep = sep
+        self.mask_id = self.tokenizer.encode(self.tokenizer.mask_token, add_special_tokens=False)[0]
 
     def __getitem__(self, idx):
         sentence, entity = self.dataset[idx]
@@ -95,13 +96,15 @@ class KDDataset(Dataset):
     def __len__(self):
         return self.dataset.__len__()
 
-    def get_mask_labels_ids(self, sentence, input_ids):
+    def get_mask_labels_ids(self, sentence, input_ids, n_masks=None):
         """Mask first entity in the sequence and return corresponding labels.
         We evaluate loss on the first part of the first entity met.
 
         Parameters:
         -----------
             sentence (list): Tokenized sentence.
+            input_ids (list): 
+            n_masks (int): Fixed number of mask tokens to use to replace input entity.
 
         Example:
         --------
@@ -174,11 +177,80 @@ class KDDataset(Dataset):
         >>> tokenizer.decode(x['input_ids'])
         '[CLS] renault zoe cars are fun to drive on french roads. [SEP]'
 
+
+        >>> x = dataset.get_mask_labels_ids(
+        ...    sentence = tokenizer.tokenize(sentence),
+        ...    input_ids = tokenizer.encode(sentence),
+        ...    n_masks = 1,
+        ... )
+
+        >>> pprint(x)
+        {'input_ids': [101,
+                14605,
+                3765,
+                2024,
+                4569,
+                2000,
+                3298,
+                2006,
+                2413,
+                4925,
+                1012,
+                102],
+        'labels': [-100,
+                    14605,
+                    -100,
+                    -100,
+                    -100,
+                    -100,
+                    -100,
+                    -100,
+                    -100,
+                    -100,
+                    -100,
+                    -100],
+        'mask': [False,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False]}
+
+        >>> tokenizer.decode(x['input_ids'])
+        '[CLS] renault cars are fun to drive on french roads. [SEP]'
+
+        >>> x = dataset.get_mask_labels_ids(
+        ...    sentence = tokenizer.tokenize(sentence),
+        ...    input_ids = tokenizer.encode(sentence),
+        ...    n_masks = 3,
+        ... )
+
+        >>> tokenizer.decode(x['input_ids'])
+        '[CLS] renault zoe [MASK] cars are fun to drive on french roads. [SEP]'
+
+        >>> x = dataset.get_mask_labels_ids(
+        ...    sentence = tokenizer.tokenize(sentence),
+        ...    input_ids = tokenizer.encode(sentence),
+        ...    n_masks = 5,
+        ... )
+
+        >>> tokenizer.decode(x['input_ids'])
+        '[CLS] renault zoe [MASK] [MASK] [MASK] cars are fun to drive on french roads. [SEP]'
+
+        >>> assert len(x['input_ids']) == len(x['mask']) and len(x['mask']) == len(x['labels'])
+
         """
         mask, labels = [], []
         stop, entities = False, False
         stop_label, label = False, False
         ids = []
+        n_masked = 0
 
         sentence.insert(0, "[CLS]")
         sentence.append("[SEP]")
@@ -194,9 +266,14 @@ class KDDataset(Dataset):
                     # Ending of an entity.
                     # We will stop masking entities.
                     entities, stop = False, True
-            else:
 
-                ids.append(input_id)
+                    if n_masks is not None:
+                        if n_masked < n_masks:
+                            for _ in range(n_masks - n_masked):
+                                ids.append(self.mask_id)
+                                mask.append(True)
+                                labels.append(-100)
+            else:
 
                 if stop:
                     # First entity already met.
@@ -206,6 +283,14 @@ class KDDataset(Dataset):
                     # First element of first entity already met.
                     label = False
 
+                if entities:
+                    n_masked += 1
+
+                if n_masks is not None:
+                    if entities and n_masked > n_masks:
+                        continue
+                
+                ids.append(input_id)
                 mask.append(entities)
 
                 if label:

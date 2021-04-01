@@ -1,6 +1,11 @@
 import torch
 
-__all__ = ["distillation_index", "expand_bert_logits", "get_tensor_distillation"]
+__all__ = [
+    "distillation_index",
+    "expand_bert_logits",
+    "get_tensor_distillation",
+    "index",
+]
 
 
 def distillation_index(tokenizer, entities):
@@ -108,3 +113,41 @@ def expand_bert_logits(logits, labels, bert_entities):
     logits = logits[mask_labels]
     logits = torch.index_select(logits, 1, bert_entities)
     return logits
+
+
+def expand_bert_logits_mask(logits, mask, bert_entities):
+    """
+
+    Parameters:
+    -----------
+        logits (torch.tensor): Output MLM logits of bert.
+        mask (torch.tensor): Boolean tensor to find masked tokens.
+        bert_entities (torch.tensor): Tensor of ids of entities.
+
+    """
+    logits = logits[mask_labels]
+    logits = torch.index_select(logits, 1, bert_entities)
+    return logits
+
+
+def index(tokenizer, entities, window_size=2):
+    """Map entities with tokenizer.
+
+    Parameters:
+
+        entities (dict): Entities of the knowledge base.
+
+    """
+    index = []
+
+    for key, value in entities.items():
+
+        ids = tokenizer.encode(key, add_special_tokens=False)[:window_size]
+
+        # [unused0]
+        if len(ids) < window_size:
+            ids.append(1)
+
+        index.append(torch.tensor(ids))
+
+    return torch.stack(index, dim=0)

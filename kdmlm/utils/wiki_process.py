@@ -6,8 +6,6 @@ import tqdm
 
 __all__ = ["WikiProcess"]
 
-# TODO: FILTER ENTITIES THAT ARE NOT A TAIL IN THE SET OF TRAINING TRIPLES.
-
 
 class WikiProcess:
     """Pipeline to clean wikipedia text.
@@ -40,15 +38,18 @@ class WikiProcess:
     >>> kb = datasets.Fb15k237(1, pre_compute=False)
     >>> filter = utils.filter_entities(train=kb.train_triples)
 
+    >>> filter.keys()
+    dict_keys(['frequencies', 'tail', 'head'])
+
     >>> entities = {
     ...    e: id_e for e, id_e in kb.entities.items()
-    ...    if id_e in filter["heads"] or id_e in filter["tails"]
+    ...    if id_e in filter["head"] or id_e in filter["tail"]
     ... }
 
-    wiki = utils.WikiProcess(
-        path_folder = 'pretrain_data/output',
-        entities = entities,
-    )
+    >>> wiki = utils.WikiProcess(
+    ...    path_folder = 'pretrain_data/output',
+    ...    entities = entities,
+    ... )
 
     for file in wiki:
         print(file)
