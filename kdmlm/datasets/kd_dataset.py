@@ -84,7 +84,6 @@ class KDDataset(Dataset):
         self.entities = entities
         self.sep = sep
         self.n_masks = n_masks
-        self.mask_id = self.tokenizer.encode(self.tokenizer.mask_token, add_special_tokens=False)[0]
 
     def __getitem__(self, idx):
         sentence, entity = self.dataset[idx]
@@ -129,14 +128,14 @@ class KDDataset(Dataset):
         ...     sep='|'
         ... )
 
-        >>> sentence = '|Renault Zoe| cars are fun to drive on |French| roads.'
+        >>> sentence = ' | Renault Zoe | cars are fun to drive on | French | roads.'
 
         >>> x = dataset.get_mask_labels_ids(
         ...    sentence = tokenizer.tokenize(sentence),
         ...    input_ids = tokenizer.encode(sentence)
-        ... )
+        ... ) 
 
-        >>> pprint(x)
+        pprint(x)
         {'input_ids': [101,
                     14605,
                     11199,
@@ -248,6 +247,27 @@ class KDDataset(Dataset):
 
         >>> assert len(x['input_ids']) == len(x['mask']) and len(x['mask']) == len(x['labels'])
 
+        >>> from transformers import RobertaTokenizer
+        >>> tokenizer = RobertaTokenizer.from_pretrained('roberta-base', add_prefix_space=True)
+
+        >>> dataset = datasets.KDDataset(
+        ...     dataset=[],
+        ...     tokenizer=tokenizer,
+        ...     entities=mkb_datasets.Fb15k237(1, pre_compute=False).entities,
+        ...     sep='|'
+        ... )
+
+        >>> x = dataset.get_mask_labels_ids(
+        ...    sentence = tokenizer.tokenize(sentence),
+        ...    input_ids = tokenizer.encode(sentence),
+        ...    n_masks = 5,
+        ... )
+
+        >>> tokenizer.decode(x['input_ids'])
+        '<s> Renault Zoe<mask><mask><mask> cars are fun to drive on French roads.</s>'
+
+        >>> assert len(x['input_ids']) == len(x['mask']) and len(x['mask']) == len(x['labels']) 
+
         """
         mask, labels = [], []
         stop, entities = False, False
@@ -255,12 +275,12 @@ class KDDataset(Dataset):
         ids = []
         n_masked = 0
 
-        sentence.insert(0, "[CLS]")
-        sentence.append("[SEP]")
+        sentence.insert(0, self.tokenizer.cls_token)
+        sentence.append(self.tokenizer.sep_token)
 
         for token, input_id in zip(sentence, input_ids):
 
-            if token == self.sep:
+            if self.sep in token:
 
                 if not entities:
                     # Begining of an entity.
@@ -273,7 +293,7 @@ class KDDataset(Dataset):
                     if n_masks is not None:
                         if n_masked < n_masks:
                             for _ in range(n_masks - n_masked):
-                                ids.append(self.mask_id)
+                                ids.append(self.tokenizer.mask_token_id)
                                 mask.append(True)
                                 labels.append(-100)
             else:
