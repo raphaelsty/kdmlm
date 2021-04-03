@@ -38,7 +38,7 @@ class Collator(DataCollatorForLanguageModeling):
             labels=batch["labels"],
         )
 
-        batch["attention_mask"] = batch["input_ids"] != 0
+        batch["attention_mask"] = batch["input_ids"] != self.tokenizer.pad_token_id
         return batch
 
     def replace_tokens(self, inputs, mask, labels):
