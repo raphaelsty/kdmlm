@@ -57,7 +57,7 @@ class WikiProcess:
 
     """
 
-    def __init__(self, path_folder, pad=500, sep="|", entities={}):
+    def __init__(self, path_folder, pad=500, sep=" | ", entities={}):
 
         self.path_folder = path_folder
         self.pad = pad
@@ -69,13 +69,8 @@ class WikiProcess:
             ("\n", ""),
             ("'", ""),
             ("<doc> ", ""),
-            (self.sep, " "),
-        ]
-
-        self.url_replacements = [
-            ('<a href="', ""),
-            ("</a>", "#"),
-            ('">', " | "),
+            (self.sep.replace(" ", ""), "") 
+            (self.sep, " "),   
         ]
 
     def read(self):
