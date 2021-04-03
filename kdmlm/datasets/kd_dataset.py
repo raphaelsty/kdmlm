@@ -52,9 +52,11 @@ class KDDataset(Dataset):
     >>> assert x['input_ids'][0].shape[0] == x['input_ids'][1].shape[0]
     >>> assert x['mask'][0].shape[0] == x['mask'][1].shape[0]
     >>> assert x['labels'][0].shape[0] == x['labels'][1].shape[0]
+    >>> assert x['attention_mask'][0].shape[0] == x['attention_mask'][1].shape[0]
 
     >>> assert x['input_ids'][0].shape[0] ==  x['mask'][0].shape[0]
     >>> assert x['labels'][0].shape[0] == x['mask'][0].shape[0]
+    >>> assert x['mask'][0].shape[0] == x['attention_mask'][0].shape[0]
 
     >>> tokenizer.decode(x['input_ids'][0])
     '[CLS] lincoln is believed to have had depression ( mood ), [MASK], and malaria. [SEP] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]'
