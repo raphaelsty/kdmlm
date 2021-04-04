@@ -49,7 +49,7 @@ class LoadFromFolder(LoadFromFile):
     >>> dataset = datasets.LoadFromFolder(folder=folder)
 
     >>> dataset[2]
-    ('Lincoln is believed to have had depression (mood), |smallpox|, and |malaria|. ', 'smallpox')
+    ('Realizing Clay was unlikely to win the presidency, he supported General | Zachary Taylor | for the Whig nomination in the a  ', 'Zachary Taylor')
 
     >>> for i in range(1000):
     ...    _ = dataset[i]
@@ -85,7 +85,7 @@ class LoadFromFolder(LoadFromFile):
         for i in range(100):
             try:
                 sentence = self.dataset[self.call + i].replace("\n", "")
-                entity = sentence.split(self.sep)[1]
+                entity = sentence.split(self.sep)[1].strip()
                 self.call += 1
                 return sentence, entity
             except:

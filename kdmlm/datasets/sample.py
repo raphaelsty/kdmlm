@@ -18,7 +18,7 @@ class Sample(LoadFromFolder):
     >>> dataset = datasets.Sample()
 
     >>> dataset[1]
-    ('Lincoln is believed to have had depression (mood), |smallpox|, and |malaria|. ', 'smallpox')
+    ('Realizing Clay was unlikely to win the presidency, he supported General | Zachary Taylor | for the Whig nomination in the a  ', 'Zachary Taylor')
 
     """
 

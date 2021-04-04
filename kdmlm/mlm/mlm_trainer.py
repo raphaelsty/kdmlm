@@ -70,9 +70,10 @@ class MlmTrainer(Trainer):
         ...    negative_sampling_size=negative_sampling_size,
         ...    alpha=alpha, seed=42, fit_bert = True, fit_kb = True, distill = False)
 
-        >>> mlm_trainer.train()
-        {'train_runtime': 351.7002, 'train_samples_per_second': 0.057, 'epoch': 10.0}
-        TrainOutput(global_step=20, training_loss=1.4457881927490235, metrics={'train_runtime': 351.7002, 'train_samples_per_second': 0.057, 'epoch': 10.0})
+        mlm_trainer.train()
+        {'train_runtime': 483.7841, 'train_samples_per_second': 0.041, 'epoch': 10.0}
+        TrainOutput(global_step=20, training_loss=2.1085277557373048, metrics={'train_runtime': 483.7841, 'train_samples_per_second': 0.041, 'epoch': 10.0})
+
     """
 
     def __init__(
