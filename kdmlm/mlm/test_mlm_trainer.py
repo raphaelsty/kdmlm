@@ -26,9 +26,8 @@ def test_mlm_trainer():
     kb = mkb_datasets.Fb15k237(1, pre_compute=False)
 
     dataset = datasets.KDDataset(
-        dataset=[("I live in |France|.", "France"), ("I live in |Spain|.", "Spain")],
+        dataset=[("I live in |France|.", kb.entities['France']), ("I live in |Spain|.", kb.entities['Spain'])],
         tokenizer=tokenizer,
-        entities=kb.entities,
         sep="|",
     )
 

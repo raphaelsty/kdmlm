@@ -34,9 +34,8 @@ class KDDataset(Dataset):
     >>> entities = mkb_datasets.Fb15k237(1, pre_compute=False).entities
 
     >>> dataset = datasets.KDDataset(
-    ...     dataset=datasets.LoadFromFolder(folder=folder),
+    ...     dataset=datasets.LoadFromFolder(folder=folder, entities=entities),
     ...     tokenizer=tokenizer,
-    ...     entities=entities,
     ...     sep='|'
     ... )
 
@@ -79,16 +78,14 @@ class KDDataset(Dataset):
 
     """
 
-    def __init__(self, dataset, tokenizer, entities, n_masks=None, sep="|"):
+    def __init__(self, dataset, tokenizer, n_masks=None, sep="|"):
         self.dataset = dataset
         self.tokenizer = tokenizer
-        self.entities = entities
         self.sep = sep
         self.n_masks = n_masks
 
     def __getitem__(self, idx):
-        sentence, entity = self.dataset[idx]
-        entity_id = self.entities[entity]
+        sentence, entity_id = self.dataset[idx]
         input_ids = self.tokenizer.encode(sentence)
         data = self.get_mask_labels_ids(
             sentence=self.tokenizer.tokenize(sentence), input_ids=input_ids, n_masks=self.n_masks
@@ -125,7 +122,6 @@ class KDDataset(Dataset):
         >>> dataset = datasets.KDDataset(
         ...     dataset=[],
         ...     tokenizer=tokenizer,
-        ...     entities=mkb_datasets.Fb15k237(1, pre_compute=False).entities,
         ...     sep='|'
         ... )
 
@@ -254,7 +250,6 @@ class KDDataset(Dataset):
         >>> dataset = datasets.KDDataset(
         ...     dataset=[],
         ...     tokenizer=tokenizer,
-        ...     entities=mkb_datasets.Fb15k237(1, pre_compute=False).entities,
         ...     sep='|'
         ... )
 

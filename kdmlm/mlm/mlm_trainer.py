@@ -47,7 +47,6 @@ class MlmTrainer(Trainer):
         >>> train_dataset = datasets.KDDataset(
         ...     dataset=datasets.Sample(),
         ...     tokenizer=tokenizer,
-        ...     entities=kb.entities,
         ...     sep='|'
         ... )
 

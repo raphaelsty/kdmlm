@@ -2,6 +2,8 @@ import pathlib
 
 from .load_dataset import LoadFromFolder
 
+from mkb import datasets as mkb_datasets
+
 __all__ = ["Sample"]
 
 
@@ -18,9 +20,10 @@ class Sample(LoadFromFolder):
     >>> dataset = datasets.Sample()
 
     >>> dataset[1]
-    ('Realizing Clay was unlikely to win the presidency, he supported General | Zachary Taylor | for the Whig nomination in the a  ', 'Zachary Taylor')
+    ('Realizing Clay was unlikely to win the presidency, he supported General | Zachary Taylor | for the Whig nomination in the a  ', 11839)
 
     """
 
     def __init__(self):
-        super().__init__(pathlib.Path(__file__).parent.joinpath("sentences"))
+        kb = mkb_datasets.Fb15k237(1, pre_compute=False)
+        super().__init__(pathlib.Path(__file__).parent.joinpath("sentences"), entities=kb.entities)

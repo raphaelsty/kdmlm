@@ -42,26 +42,30 @@ class LoadFromFolder(LoadFromFile):
     --------
 
     >>> from kdmlm import datasets
+    >>> from mkb import datasets as mkb_datasets
 
     >>> import pathlib
     >>> folder = pathlib.Path(__file__).parent.joinpath('./../datasets/sentences')
 
-    >>> dataset = datasets.LoadFromFolder(folder=folder)
+    >>> kb = mkb_datasets.Fb15k237(1, pre_compute=False)
+
+    >>> dataset = datasets.LoadFromFolder(folder=folder, entities=kb.entities)
 
     >>> dataset[2]
-    ('Realizing Clay was unlikely to win the presidency, he supported General | Zachary Taylor | for the Whig nomination in the a  ', 'Zachary Taylor')
+    ('Realizing Clay was unlikely to win the presidency, he supported General | Zachary Taylor | for the Whig nomination in the a  ', 11839)
 
     >>> for i in range(1000):
     ...    _ = dataset[i]
 
     """
 
-    def __init__(self, folder, sep="|"):
+    def __init__(self, folder, entities, sep="|"):
         self.folder = folder
         self.list_files = os.listdir(folder)
         self.call = 0
         self.id_file = 0
         self.sep = sep
+        self.entities = entities
 
         super().__init__(path=os.path.join(self.folder, self.list_files[self.id_file]))
 
@@ -85,9 +89,9 @@ class LoadFromFolder(LoadFromFile):
         for i in range(100):
             try:
                 sentence = self.dataset[self.call + i].replace("\n", "")
-                entity = sentence.split(self.sep)[1].strip()
+                entity_id = self.entities[sentence.split(self.sep)[1].strip()]
                 self.call += 1
-                return sentence, entity
+                return sentence, entity_id
             except:
                 continue
 
