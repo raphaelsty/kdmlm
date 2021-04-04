@@ -128,14 +128,14 @@ class KDDataset(Dataset):
         ...     sep='|'
         ... )
 
-        >>> sentence = ' | Renault Zoe | cars are fun to drive on | French | roads.'
+        >>> sentence = '| Renault Zoe | cars are fun to drive on | French | roads.'
 
         >>> x = dataset.get_mask_labels_ids(
         ...    sentence = tokenizer.tokenize(sentence),
         ...    input_ids = tokenizer.encode(sentence)
         ... ) 
 
-        pprint(x)
+        >>> pprint(x)
         {'input_ids': [101,
                     14605,
                     11199,

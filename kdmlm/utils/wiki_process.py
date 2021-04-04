@@ -57,7 +57,7 @@ class WikiProcess:
 
     """
 
-    def __init__(self, path_folder, pad=500, sep=" | ", entities={}):
+    def __init__(self, path_folder, pad=500, sep="|", entities={}):
 
         self.path_folder = path_folder
         self.pad = pad
@@ -69,7 +69,7 @@ class WikiProcess:
             ("\n", ""),
             ("'", ""),
             ("<doc> ", ""),
-            (self.sep.replace(" ", ""), "") 
+            (self.sep.replace(" ", ""), ""), 
             (self.sep, " "),   
         ]
 
@@ -130,7 +130,7 @@ class WikiProcess:
                 if clean_url in self.entities:
                     sentence = sentence.replace(
                         f'<a href="{url}">{id_e}</a>',
-                        f"{self.sep}{clean_url}{self.sep}",
+                        f"{self.sep} {clean_url} {self.sep}",
                     )
                     found = True
                 else:
