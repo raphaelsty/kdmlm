@@ -134,6 +134,7 @@ class MlmTrainer(Trainer):
         do_distill_bert=True,
         do_distill_kg=True,
         seed=42,
+        path_score_kb=None,
     ):
         super().__init__(
             model=model,
@@ -149,6 +150,9 @@ class MlmTrainer(Trainer):
         self.fit_bert = fit_bert
         self.fit_kb = fit_kb
         self.fit_kb_n_times = fit_kb_n_times
+
+        self.path_score_kb = path_score_kb
+        self.results = []
 
         random.seed(seed)
 
@@ -334,3 +338,7 @@ class MlmTrainer(Trainer):
             self.print_scores(step=self.step_kb, name="test", scores=scores_test)
 
         return self
+
+    def export_to_csv(cls, name, scores):
+
+        df.to_csv(f"{self.path_score_kb}", index=False)

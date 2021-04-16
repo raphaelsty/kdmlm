@@ -203,6 +203,7 @@ class Distillation:
 
         self.heads, self.tails = get_tensor_distillation([_ for _ in range(k * 2)])
         self.bert_entities, _ = distillation_index(tokenizer=tokenizer, entities=entities)
+        self.bert_entities = self.bert_entities.to(device)
 
         random.seed(42)
 

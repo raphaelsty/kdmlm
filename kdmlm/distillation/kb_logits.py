@@ -166,19 +166,19 @@ class KbLogits:
 
             heads_index = torch.cat(
                 [
-                    torch.argsort(heads_score, dim=0, descending=True)[: self.k].detach().cpu(),
-                    torch.randint(low=0, high=self.n_entities - 1, size=(self.k,)),
+                    torch.argsort(heads_score, dim=0, descending=True)[: self.k],
+                    torch.randint(low=0, high=self.n_entities - 1, size=(self.k,)).to(self.device),
                 ]
             )
 
             tails_index = torch.cat(
                 [
-                    torch.argsort(tails_score, dim=0, descending=True)[: self.k].detach().cpu(),
-                    torch.randint(low=0, high=self.n_entities - 1, size=(self.k,)),
+                    torch.argsort(tails_score, dim=0, descending=True)[: self.k],
+                    torch.randint(low=0, high=self.n_entities - 1, size=(self.k,)).to(self.device),
                 ]
             )
 
-            heads_score = torch.index_select(heads_score, 0, heads_index)
-            tails_score = torch.index_select(tails_score, 0, tails_index)
+            heads_score = torch.index_select(heads_score, 0, heads_index.to(self.device))
+            tails_score = torch.index_select(tails_score, 0, tails_index.to(self.device))
 
             yield h, t, heads_score, tails_score, heads_index, tails_index
