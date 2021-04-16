@@ -1,12 +1,12 @@
-import pprint
 import random
 
 import torch
 from mkb import losses as mkb_losses
 from mkb import sampling as mkb_sampling
+from torch.utils import data
 from transformers import Trainer
 
-from ..utils.filter import filter_entities
+from ..distillation import Distillation
 
 __all__ = ["MlmTrainer"]
 
@@ -42,7 +42,14 @@ class MlmTrainer(Trainer):
         >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         >>> model = BertForMaskedLM.from_pretrained('bert-base-uncased')
 
-        >>> kb = mkb_datasets.Fb15k237(1, pre_compute = False)
+        >>> kb = mkb_datasets.Fb15k237(10, pre_compute = False, num_workers=0)
+
+        >>> kb_model = mkb_models.TransE(
+        ...     entities = kb.entities,
+        ...     relations = kb.relations,
+        ...     hidden_dim = 2,
+        ...     gamma = 8
+        ... )
 
         >>> train_dataset = datasets.KDDataset(
         ...     dataset=datasets.Sample(),
@@ -53,25 +60,37 @@ class MlmTrainer(Trainer):
         >>> data_collator = datasets.Collator(tokenizer=tokenizer)
 
         >>> training_args = TrainingArguments(output_dir = f'./checkpoints',
-        ... overwrite_output_dir = True, num_train_epochs = 10,
-        ... per_device_train_batch_size = 64, save_steps = 500, save_total_limit = 1,
-        ... do_train = True,  do_predict = True)
+        ... overwrite_output_dir = True, num_train_epochs = 3,
+        ... per_device_train_batch_size = 10, save_steps = 500, save_total_limit = 1,
+        ... do_train = True, do_predict = True)
 
-        >>> kb_model = mkb_models.TransE(entities = kb.entities, relations = kb.relations,
-        ...    hidden_dim = 1, gamma = 8)
+        >>> mlm_trainer = MlmTrainer(
+        ...    args = training_args,
+        ...    data_collator = data_collator,
+        ...    model = model,
+        ...    train_dataset = train_dataset,
+        ...    tokenizer = tokenizer,
+        ...    kb = kb,
+        ...    kb_model = kb_model,
+        ...    negative_sampling_size = 10,
+        ...    fit_kb_n_times = 10,
+        ...    n = 1000,
+        ...    top_k_size = 100,
+        ...    update_top_k_every = 20,
+        ...    alpha = 0.3,
+        ...    seed = 42,
+        ...    fit_bert = True,
+        ...    fit_kb = True,
+        ...    distill = True
+        ... )
 
-        >>> negative_sampling_size = 2
-        >>> alpha = 0.5
+        >>> len(mlm_trainer.distillation.kb_logits.logits)
+        1583
 
-        >>> mlm_trainer = MlmTrainer(model=model, args=training_args,
-        ...    data_collator=data_collator, train_dataset=train_dataset,
-        ...    tokenizer=tokenizer, kb=kb, kb_model=kb_model,
-        ...    negative_sampling_size=negative_sampling_size,
-        ...    alpha=alpha, seed=42, fit_bert = True, fit_kb = True, distill = False)
+        >>> len(mlm_trainer.distillation.bert_logits.logits)
+        72
 
         mlm_trainer.train()
-        {'train_runtime': 483.7841, 'train_samples_per_second': 0.041, 'epoch': 10.0}
-        TrainOutput(global_step=20, training_loss=2.1085277557373048, metrics={'train_runtime': 483.7841, 'train_samples_per_second': 0.041, 'epoch': 10.0})
 
     """
 
@@ -87,13 +106,15 @@ class MlmTrainer(Trainer):
         negative_sampling_size,
         kb_evaluation=None,
         eval_kb_every=None,
-        alpha=0.5,
-        seed=42,
-        top_k_size=10,
-        n_random_entities=10,
+        alpha=0.3,
+        n=1000,
+        top_k_size=100,
+        update_top_k_every=1000,
+        fit_kb_n_times=1,
         fit_bert=True,
         fit_kb=True,
         distill=True,
+        seed=42,
     ):
         super().__init__(
             model=model,
@@ -104,63 +125,13 @@ class MlmTrainer(Trainer):
 
         self.alpha = alpha
 
-        # Filter entities that are part of a tail
-        self.triples = filter_entities(train=kb.train)
         self.kb_model = kb_model.to(self.args.device)
-
-        self.top_k_size = top_k_size
-        self.n_random_entities = n_random_entities
 
         self.fit_bert = fit_bert
         self.fit_kb = fit_kb
+        self.fit_kb_n_times = fit_kb_n_times
 
         random.seed(seed)
-
-        entities_to_bert = {
-            id_e: tokenizer.decode([tokenizer.encode(e, add_special_tokens=False)[0]])
-            for e, id_e in kb.entities.items()
-        }
-
-        mapping_kb_bert = {
-            id_e: tokenizer.encode(e, add_special_tokens=False)[0]
-            for id_e, e in entities_to_bert.items()
-        }
-
-        # Entities ID of the knowledge base Kb and Bert ordered.
-        self.entities_kb = torch.tensor(
-            list(mapping_kb_bert.keys()), dtype=torch.int64
-        ).to(self.args.device)
-
-        self.entities_bert = torch.tensor(
-            list(mapping_kb_bert.values()), dtype=torch.int64
-        ).to(self.args.device)
-
-        self.tensor_distillation_tails = torch.stack(
-            [
-                torch.tensor(
-                    [0 for _ in range(len(self.entities_kb))], dtype=torch.int64
-                ),
-                torch.tensor(
-                    [0 for _ in range(len(self.entities_kb))], dtype=torch.int64
-                ),
-                torch.tensor(
-                    [e for e in self.entities_kb], dtype=torch.int64
-                ),  # Distill only tails
-            ],
-            dim=1,
-        )
-
-        self.tensor_distillation_heads = self.tensor_distillation_tails.clone()
-        self.tensor_distillation_heads[:, 0] = torch.tensor(
-            [e for e in self.entities_kb], dtype=torch.int64
-        )
-
-        # Wether to train bert or kb model.
-        self.n_student = 0
-        self.n_mode = 0
-
-        self.mkb_losses = mkb_losses.Adversarial()
-        self.kl_divergence = mkb_losses.KlDivergence()
 
         # Link prediction task
         self.negative_sampling = mkb_sampling.NegativeSampling(
@@ -177,11 +148,32 @@ class MlmTrainer(Trainer):
         )
 
         self.kb = kb
-
         self.kb_evaluation = kb_evaluation
         self.eval_kb_every = eval_kb_every
-        self.step = 0
+        self.update_top_k_every = update_top_k_every
+
+        self.step_kb = 0
+        self.step_bert = 0
+
         self.distill = distill
+
+        self.dataset_distillation = data.DataLoader(
+            dataset=train_dataset,
+            collate_fn=self.data_collator,
+            batch_size=100,
+        )
+
+        self.distillation = Distillation(
+            bert_model=model,
+            kb_model=kb_model,
+            kb=kb,
+            dataset=self.dataset_distillation,
+            tokenizer=tokenizer,
+            entities=kb.entities,
+            k=top_k_size,
+            n=n,
+            device=self.args.device,
+        )
 
     @staticmethod
     def print_scores(step, name, scores):
@@ -191,163 +183,77 @@ class MlmTrainer(Trainer):
             print(f"\t{key}: {value:3f}")
         print("\n")
 
-    def filter_labels(self, logits, labels):
-        """Computes the knowledge distillation loss."""
-        mask_labels = labels != -100
-        logits = logits[mask_labels]
-        logits = torch.index_select(logits, 1, self.entities_bert)
-        return logits
-
     def training_step(self, model, inputs):
         """Training step."""
-        model.train()
 
-        inputs.pop("mask")
-        entity_ids = inputs.pop("entity_ids")
-        inputs = self._prepare_inputs(inputs)
+        if self.fit_kb:
 
-        sample_mode_distillation = self.get_sample_mode_distillation(
-            list_entities=entity_ids
-        )
+            for _ in range(self.fit_kb_n_times):
 
-        sample, mode, distillation = (
-            sample_mode_distillation["sample"],
-            sample_mode_distillation["mode"],
-            sample_mode_distillation["distillation"],
-        )
+                self.step_kb += 1
 
-        student = self.is_student()
+                data = next(self.kb)
+                sample, weight, mode = data["sample"], data["weight"], data["mode"]
+                loss = self.link_prediction(sample=sample, weight=weight, mode=mode)
 
-        # Fit bert or kb
-        if student:
+                if self.distill:
+                    distillation_loss = self.distillation.distill_bert(
+                        kb_model=self.kb_model,
+                        sample=sample,
+                    )
+                    loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
+
+                loss.backward()
+
+                self.kb_optimizer.step()
+                self.kb_optimizer.zero_grad()
+
+                if self.kb_evaluation is not None:
+                    self.link_prediction_evaluation()
+
+                if (self.step_kb + 1) % self.update_top_k_every == 0:
+                    self.distillation.update_kb(kb=self.kb, kb_model=self.kb_model)
+
+        if self.fit_bert:
+
+            self.step_bert += 1
+
+            inputs.pop("mask")
+            entity_ids = inputs.pop("entity_ids")
+            labels = inputs["labels"]
+            inputs = self._prepare_inputs(inputs)
+
             model.train()
-            loss, outputs = self.compute_loss(model, inputs, return_outputs=True)
-        elif self.distill:
+
+            loss, outputs = self.compute_loss(model, inputs=inputs, return_outputs=True)
+
+            if self.distill:
+
+                distillation_loss = self.distillation.distill_transe(
+                    entities=entity_ids,
+                    logits=outputs.logits,
+                    labels=labels,
+                )
+
             model = model.eval()
-            with torch.no_grad():
-                outputs = model(inputs["input_ids"])
 
-        if not student:
-            loss = self.link_prediction(sample=sample, mode=mode)
+            if self.args.n_gpu > 1:
+                loss = loss.mean()
+                distillation_loss = distillation_loss.mean()
 
-        if self.distill:
-            logits = self.filter_labels(
-                outputs.logits.to(self.args.device),
-                inputs["labels"].to(self.args.device),
-            )
+            if self.distill:
+                loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
 
-        if student and self.distill:
+            loss.backward()
 
-            with torch.no_grad():
-                kb_scores = self.kb_model(distillation.to(self.args.device))
-                top_k_scores = self.top_k(
-                    teacher_scores=kb_scores, student_scores=logits
+            if (self.step_bert + 1) % self.update_top_k_every == 0:
+                self.distillation.update_bert(
+                    model=model, dataset=self.dataset_distillation, tokenizer=self.tokenizer
                 )
-
-        elif not student and self.distill:
-
-            kb_scores = self.kb_model(distillation.to(self.args.device))
-            top_k_scores = self.top_k(teacher_scores=logits, student_scores=kb_scores)
-
-        if self.distill:
-
-            distillation_loss = self.kl_divergence(
-                student_score=top_k_scores["top_k_teacher"],
-                teacher_score=top_k_scores["top_k_student"],
-                T=1,
-            )
-
-        if self.args.n_gpu > 1:
-            loss = loss.mean()
-            distillation_loss = distillation_loss.mean()
-
-        if self.distill:
-            loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
-
-        loss.backward()
-
-        if not student:
-            self.kb_optimizer.step()
-            self.kb_optimizer.zero_grad()
-
-        if self.kb_evaluation is not None:
-
-            self.step += 1
-
-            if (self.step % self.eval_kb_every) == 0:
-
-                scores_valid = self.kb_evaluation.eval(
-                    model=self.kb_model,
-                    dataset=self.kb.valid,
-                )
-
-                scores_test = self.kb_evaluation.eval(
-                    model=self.kb_model,
-                    dataset=self.kb.test,
-                )
-
-                self.print_scores(step=self.step, name="valid", scores=scores_valid)
-                self.print_scores(step=self.step, name="test", scores=scores_test)
 
         return loss.detach()
 
-    def get_sample_mode_distillation(self, list_entities):
-        """Init tensor to distill the knowledge of the KB. Also return the input sample
-        for the link prediction task.
-        """
-        sample = []
-        distillation = []
-
-        if self.n_mode % 2 == 0:
-            mode = "head"
-            inverse_mode = "tail"
-        else:
-            mode = "tail"
-            inverse_mode = "head"
-
-        self.n_mode += 1
-
-        for entity in list_entities:
-            entity = entity.item()
-
-            if entity in self.triples[mode]:
-                head, relation, tail = random.choice(self.triples[mode][entity])
-
-            else:
-                head, relation, tail = random.choice(self.triples[inverse_mode][entity])
-
-            if mode == "tail":
-                new_tensor = self.tensor_distillation_tails.clone()
-                new_tensor[:, 0] = head
-                new_tensor[:, 1] = relation
-            elif mode == "head":
-                new_tensor = self.tensor_distillation_heads.clone()
-                new_tensor[:, 2] = tail
-                new_tensor[:, 1] = relation
-
-            distillation.append(new_tensor)
-            sample.append(torch.tensor([head, relation, tail], dtype=torch.int64))
-
-        return {
-            "sample": torch.stack(sample),
-            "distillation": torch.stack(distillation),
-            "mode": f"{mode}-batch",
-        }
-
-    def is_student(self):
-        """Wether to train bert or transe."""
-        if self.fit_bert and not self.fit_kb:
-            return True
-
-        if not self.fit_bert:
-            return False
-
-        self.n_student += 1
-        if self.n_student % 2 == 0:
-            return False
-        return True
-
-    def link_prediction(self, sample, mode):
+    def link_prediction(self, sample, weight, mode):
         """"Method dedicated to link prediction task."""
         negative_sample = self.negative_sampling.generate(sample=sample, mode=mode)
 
@@ -361,41 +267,28 @@ class MlmTrainer(Trainer):
             mode=mode,
         )
 
-        loss = self.mkb_losses(
+        loss = mkb_losses.Adversarial(0.5)(
             positive_score,
             negative_score,
-            weight=torch.ones(sample.shape[0]).to(self.args.device),
-        )  # TODO: Add custom weights.
+            weight=weight.to(self.args.device),
+        )
         return loss
 
-    def top_k(self, teacher_scores, student_scores):
-        """Returns top k scores and k' random scores."""
-        top_k_index = torch.argsort(teacher_scores, dim=1, descending=True)[
-            :, 0 : self.top_k_size
-        ]
+    def link_prediction_evaluation(self):
+        """Eval KB model."""
+        if (self.step_kb + 1) % self.eval_kb_every == 0:
 
-        random_index = torch.randint(
-            len(self.entities_kb), (self.n_random_entities,)
-        ).to(self.args.device)
+            scores_valid = self.kb_evaluation.eval(
+                model=self.kb_model,
+                dataset=self.kb.valid,
+            )
 
-        top_k_teacher = torch.stack(
-            [
-                torch.index_select(teacher_scores[i], 0, top_k_index[i])
-                for i in range(teacher_scores.shape[0])
-            ]
-        )
+            scores_test = self.kb_evaluation.eval(
+                model=self.kb_model,
+                dataset=self.kb.test,
+            )
 
-        top_k_student = torch.stack(
-            [
-                torch.index_select(student_scores[i], 0, top_k_index[i])
-                for i in range(student_scores.shape[0])
-            ]
-        )
+            self.print_scores(step=self.step_kb, name="valid", scores=scores_valid)
+            self.print_scores(step=self.step_kb, name="test", scores=scores_test)
 
-        random_teacher = torch.index_select(teacher_scores, 1, random_index)
-        random_student = torch.index_select(student_scores, 1, random_index)
-
-        top_k_teacher = torch.cat((top_k_teacher, random_teacher), dim=1)
-        top_k_student = torch.cat((top_k_student, random_student), dim=1)
-
-        return {"top_k_teacher": top_k_teacher, "top_k_student": top_k_student}
+        return self

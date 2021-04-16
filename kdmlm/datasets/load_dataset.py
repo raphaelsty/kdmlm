@@ -1,4 +1,5 @@
 import os
+import random
 
 __all__ = ["LoadFromFolder", "LoadFromFile", "LoadFromStream"]
 
@@ -59,13 +60,17 @@ class LoadFromFolder(LoadFromFile):
 
     """
 
-    def __init__(self, folder, entities, sep="|"):
+    def __init__(self, folder, entities, sep="|", shuffle=False, seed=42):
         self.folder = folder
         self.list_files = os.listdir(folder)
         self.call = 0
         self.id_file = 0
         self.sep = sep
         self.entities = entities
+
+        if shuffle:
+            random.seed(42)
+            random.shuffle(self.list_files)
 
         super().__init__(path=os.path.join(self.folder, self.list_files[self.id_file]))
 
@@ -82,9 +87,7 @@ class LoadFromFolder(LoadFromFile):
             else:
                 self.id_file += 1
 
-            self.dataset = self.load(
-                path=os.path.join(self.folder, self.list_files[self.id_file])
-            )
+            self.dataset = self.load(path=os.path.join(self.folder, self.list_files[self.id_file]))
 
         for i in range(100):
             try:
