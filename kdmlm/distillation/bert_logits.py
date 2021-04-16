@@ -121,15 +121,15 @@ class BertLogits:
 
         logits = expand_bert_logits(
             logits=output.logits,
-            labels=labels,
-            bert_entities=self.bert_entities,
+            labels=labels.to(self.device),
+            bert_entities=self.bert_entities.to(self.device),
         )
 
-        top_k = torch.argsort(logits, dim=1, descending=True)[:, 0 : self.k].detach().cpu()
-        logits = logits.detach().cpu()
+        top_k = torch.argsort(logits, dim=1, descending=True)[:, 0 : self.k]
+
         random_k = torch.randint(
             low=0, high=len(self.kg_entities) - 1, size=(logits.shape[0], self.k)
-        )
+        ).to(self.device)
 
         for i, entity in enumerate(entity_ids):
 

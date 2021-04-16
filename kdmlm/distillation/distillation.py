@@ -203,7 +203,7 @@ class Distillation:
 
         self.heads, self.tails = get_tensor_distillation([_ for _ in range(k * 2)])
         self.bert_entities, _ = distillation_index(tokenizer=tokenizer, entities=entities)
-        self.bert_entities = self.bert_entities.to(device)
+        self.bert_entities = self.bert_entities.to(self.device)
 
         random.seed(42)
 
@@ -291,11 +291,13 @@ class Distillation:
     def update_kb(self, kb, kb_model):
         """Updates distributions."""
         if self.do_distill_kg:
-            self.kb_logits.update(dataset=kb, model=kb_model)
+            self.kb_logits.logits = self.kb_logits.update(dataset=kb, model=kb_model)
         return self
 
     def update_bert(self, dataset, tokenizer, model):
         """Updates distributions."""
         if self.do_distill_bert:
-            self.bert_logits.update(dataset=dataset, tokenizer=tokenizer, model=model)
+            self.bert_logits.logits = self.bert_logits.update(
+                dataset=dataset, tokenizer=tokenizer, model=model
+            )
         return self
