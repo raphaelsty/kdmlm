@@ -174,23 +174,32 @@ class Distillation:
         entities,
         k,
         n,
+        do_distill_bert=True,
+        do_distill_kg=True,
         device="cuda",
         seed=42,
     ):
+        self.do_distill_bert = do_distill_bert
+        self.do_distill_kg = do_distill_kg
         self.device = device
-        self.bert_logits = BertLogits(
-            model=bert_model,
-            dataset=dataset,
-            tokenizer=tokenizer,
-            entities=entities,
-            k=k,
-            n=n,
-            device=self.device,
-        )
 
-        self.kb_logits = KbLogits(
-            model=kb_model, dataset=kb, entities=kb.entities, k=k, n=n, device=self.device
-        )
+        if self.do_distill_bert:
+
+            self.bert_logits = BertLogits(
+                model=bert_model,
+                dataset=dataset,
+                tokenizer=tokenizer,
+                entities=entities,
+                k=k,
+                n=n,
+                device=self.device,
+            )
+
+        if self.do_distill_kg:
+
+            self.kb_logits = KbLogits(
+                model=kb_model, dataset=kb, entities=kb.entities, k=k, n=n, device=self.device
+            )
 
         self.heads, self.tails = get_tensor_distillation([_ for _ in range(k * 2)])
         self.bert_entities, _ = distillation_index(tokenizer=tokenizer, entities=entities)
@@ -213,54 +222,61 @@ class Distillation:
         """Distill Bert to TransE."""
         samples, teacher_score = [], []
 
-        for h, r, t in sample:
+        if self.do_distill_bert:
 
-            h, r, t = h.item(), r.item(), t.item()
+            for h, r, t in sample:
 
-            if h in self.bert_logits.logits:
-                l, c = random.choice(self.bert_logits.logits[h])
-                teacher_score.append(l)
-                samples.append(
-                    self.distillation_sample(
-                        candidates=c, head=h, relation=r, tail=t, mode="head-batch"
+                h, r, t = h.item(), r.item(), t.item()
+
+                if h in self.bert_logits.logits:
+                    l, c = random.choice(self.bert_logits.logits[h])
+                    teacher_score.append(l)
+                    samples.append(
+                        self.distillation_sample(
+                            candidates=c, head=h, relation=r, tail=t, mode="head-batch"
+                        )
                     )
-                )
 
-            if t in self.bert_logits.logits:
-                l, c = random.choice(self.bert_logits.logits[t])
-                teacher_score.append(l)
-                samples.append(
-                    self.distillation_sample(
-                        candidates=c, head=h, relation=r, tail=t, mode="tail-batch"
+                if t in self.bert_logits.logits:
+                    l, c = random.choice(self.bert_logits.logits[t])
+                    teacher_score.append(l)
+                    samples.append(
+                        self.distillation_sample(
+                            candidates=c, head=h, relation=r, tail=t, mode="tail-batch"
+                        )
                     )
-                )
 
         loss = 0
         if teacher_score:
             teacher_score = torch.stack(teacher_score, dim=0)
             student_score = kb_model(torch.stack(samples, dim=0).to(self.device))
             loss += self.kl_divergence(teacher_score=teacher_score, student_score=student_score)
+
         return loss
 
     def distill_transe(self, entities, logits, labels):
         """Distill Transe to Bert."""
-        mask_labels = labels != -100
-        logits = logits[mask_labels]
-        logits = torch.index_select(logits, 1, self.bert_entities)
         student_score, teacher_score = [], []
 
-        for p_e_c, e in zip(logits, entities):
-            e = e.item()
-            if e in self.kb_logits.logits:
-                top_k, candidates = random.choice(self.kb_logits.logits[e])
-                student_score.append(torch.index_select(input=p_e_c, dim=0, index=candidates))
-                teacher_score.append(top_k)
+        if self.do_distill_kg:
+
+            mask_labels = labels != -100
+            logits = logits[mask_labels]
+            logits = torch.index_select(logits, 1, self.bert_entities)
+
+            for p_e_c, e in zip(logits, entities):
+                e = e.item()
+                if e in self.kb_logits.logits:
+                    top_k, candidates = random.choice(self.kb_logits.logits[e])
+                    student_score.append(torch.index_select(input=p_e_c, dim=0, index=candidates))
+                    teacher_score.append(top_k)
 
         loss = 0
         if teacher_score:
             student_score = torch.stack(student_score, dim=0)
             teacher_score = torch.stack(teacher_score, dim=0)
             loss += self.kl_divergence(teacher_score=teacher_score, student_score=student_score)
+
         return loss
 
     def kl_divergence(self, teacher_score, student_score):
@@ -273,10 +289,12 @@ class Distillation:
 
     def update_kb(self, kb, kb_model):
         """Updates distributions."""
-        self.kb_logits.update(dataset=kb, model=kb_model)
+        if self.do_distill_kg:
+            self.kb_logits.update(dataset=kb, model=kb_model)
         return self
 
     def update_bert(self, dataset, tokenizer, model):
         """Updates distributions."""
-        self.bert_logits.update(dataset=dataset, tokenizer=tokenizer, model=model)
+        if self.do_distill_bert:
+            self.bert_logits.update(dataset=dataset, tokenizer=tokenizer, model=model)
         return self

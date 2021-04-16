@@ -14,83 +14,101 @@ __all__ = ["MlmTrainer"]
 class MlmTrainer(Trainer):
     """Custom trainer to distill knowledge to bert from knowledge graphs embeddings.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
 
         knowledge: mkb model.
         alpha (float): Weight to give to knowledge distillation.
 
 
-    Example:
+    Examples
+    --------
 
-        >>> from kdmlm import mlm
-        >>> from kdmlm import datasets
+    >>> from kdmlm import mlm
+    >>> from kdmlm import datasets
 
-        >>> from mkb import datasets as mkb_datasets
-        >>> from mkb import models as mkb_models
+    >>> from mkb import datasets as mkb_datasets
+    >>> from mkb import models as mkb_models
+    >>> from mkb import evaluation
 
-        >>> from transformers import BertTokenizer
-        >>> from transformers import BertForMaskedLM
+    >>> from transformers import BertTokenizer
+    >>> from transformers import BertForMaskedLM
 
-        >>> from transformers import DataCollatorForLanguageModeling
-        >>> from transformers import LineByLineTextDataset
-        >>> from transformers import TrainingArguments
+    >>> from transformers import DataCollatorForLanguageModeling
+    >>> from transformers import LineByLineTextDataset
+    >>> from transformers import TrainingArguments
 
-        >>> import torch
-        >>> _ = torch.manual_seed(42)
+    >>> import torch
+    >>> _ = torch.manual_seed(42)
 
-        >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-        >>> model = BertForMaskedLM.from_pretrained('bert-base-uncased')
+    >>> device = 'cpu'
 
-        >>> kb = mkb_datasets.Fb15k237(10, pre_compute = False, num_workers=0)
+    >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    >>> model = BertForMaskedLM.from_pretrained('bert-base-uncased')
 
-        >>> kb_model = mkb_models.TransE(
-        ...     entities = kb.entities,
-        ...     relations = kb.relations,
-        ...     hidden_dim = 2,
-        ...     gamma = 8
-        ... )
+    >>> kb = mkb_datasets.Fb15k237(10, pre_compute = False, num_workers=0)
 
-        >>> train_dataset = datasets.KDDataset(
-        ...     dataset=datasets.Sample(),
-        ...     tokenizer=tokenizer,
-        ...     sep='|'
-        ... )
+    >>> kb_model = mkb_models.TransE(
+    ...     entities = kb.entities,
+    ...     relations = kb.relations,
+    ...     hidden_dim = 2,
+    ...     gamma = 8
+    ... )
 
-        >>> data_collator = datasets.Collator(tokenizer=tokenizer)
+    >>> validation = evaluation.Evaluation(
+    ...     true_triples = kb.train + kb.valid + kb.test,
+    ...     entities = kb.entities,
+    ...     relations = kb.relations,
+    ...     batch_size = 8,
+    ...     device = device,
+    ... )
 
-        >>> training_args = TrainingArguments(output_dir = f'./checkpoints',
-        ... overwrite_output_dir = True, num_train_epochs = 3,
-        ... per_device_train_batch_size = 10, save_steps = 500, save_total_limit = 1,
-        ... do_train = True, do_predict = True)
+    >>> train_dataset = datasets.KDDataset(
+    ...     dataset=datasets.Sample(),
+    ...     tokenizer=tokenizer,
+    ...     sep='|'
+    ... )
 
-        >>> mlm_trainer = MlmTrainer(
-        ...    args = training_args,
-        ...    data_collator = data_collator,
-        ...    model = model,
-        ...    train_dataset = train_dataset,
-        ...    tokenizer = tokenizer,
-        ...    kb = kb,
-        ...    kb_model = kb_model,
-        ...    negative_sampling_size = 10,
-        ...    fit_kb_n_times = 10,
-        ...    n = 1000,
-        ...    top_k_size = 100,
-        ...    update_top_k_every = 20,
-        ...    alpha = 0.3,
-        ...    seed = 42,
-        ...    fit_bert = True,
-        ...    fit_kb = True,
-        ...    distill = True
-        ... )
+    >>> len(train_dataset)
+    100
 
-        >>> len(mlm_trainer.distillation.kb_logits.logits)
-        1583
+    >>> data_collator = datasets.Collator(tokenizer=tokenizer)
 
-        >>> len(mlm_trainer.distillation.bert_logits.logits)
-        72
+    >>> training_args = TrainingArguments(
+    ...     output_dir = f'./checkpoints',
+    ...     overwrite_output_dir = True,
+    ...     num_train_epochs = 2,
+    ...     per_device_train_batch_size = 10,
+    ...     save_steps = 500,
+    ...     save_total_limit = 1,
+    ...     do_train = True,
+    ...     do_predict = True,
+    ... )
 
-        mlm_trainer.train()
+    >>> mlm_trainer = MlmTrainer(
+    ...    args = training_args,
+    ...    data_collator = data_collator,
+    ...    model = model,
+    ...    train_dataset = train_dataset,
+    ...    tokenizer = tokenizer,
+    ...    kb = kb,
+    ...    kb_model = kb_model,
+    ...    kb_evaluation = validation,
+    ...    eval_kb_every = 30,
+    ...    negative_sampling_size = 10,
+    ...    fit_kb_n_times = 2,
+    ...    n = 1000,
+    ...    top_k_size = 100,
+    ...    update_top_k_every = 20,
+    ...    alpha = 0.3,
+    ...    seed = 42,
+    ...    fit_bert = False,
+    ...    fit_kb = True,
+    ...    do_distill_kg = False,
+    ...    do_distill_bert = True,
+    ... )
+
+    >>> mlm_trainer.train()
 
     """
 
@@ -113,7 +131,8 @@ class MlmTrainer(Trainer):
         fit_kb_n_times=1,
         fit_bert=True,
         fit_kb=True,
-        distill=True,
+        do_distill_bert=True,
+        do_distill_kg=True,
         seed=42,
     ):
         super().__init__(
@@ -155,8 +174,6 @@ class MlmTrainer(Trainer):
         self.step_kb = 0
         self.step_bert = 0
 
-        self.distill = distill
-
         self.dataset_distillation = data.DataLoader(
             dataset=train_dataset,
             collate_fn=self.data_collator,
@@ -172,6 +189,8 @@ class MlmTrainer(Trainer):
             entities=kb.entities,
             k=top_k_size,
             n=n,
+            do_distill_bert=do_distill_bert,
+            do_distill_kg=do_distill_kg,
             device=self.args.device,
         )
 
@@ -183,30 +202,36 @@ class MlmTrainer(Trainer):
             print(f"\t{key}: {value:3f}")
         print("\n")
 
-    def training_step(self, model, inputs):
-        """Training step."""
-
-        if self.fit_kb:
+    def training_step_kb(self):
+        """Update kb model."""
+        if self.fit_kb or self.distillation.do_distill_bert:
 
             for _ in range(self.fit_kb_n_times):
-
                 self.step_kb += 1
+
+                loss = 0
+                distillation_loss = 0
 
                 data = next(self.kb)
                 sample, weight, mode = data["sample"], data["weight"], data["mode"]
-                loss = self.link_prediction(sample=sample, weight=weight, mode=mode)
 
-                if self.distill:
+                if self.fit_kb:
+                    loss += self.link_prediction(sample=sample, weight=weight, mode=mode)
+
+                if self.distillation.do_distill_bert:
+
                     distillation_loss = self.distillation.distill_bert(
                         kb_model=self.kb_model,
                         sample=sample,
                     )
-                    loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
 
-                loss.backward()
+                loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
 
-                self.kb_optimizer.step()
-                self.kb_optimizer.zero_grad()
+                if loss != 0:
+
+                    loss.backward()
+                    self.kb_optimizer.step()
+                    self.kb_optimizer.zero_grad()
 
                 if self.kb_evaluation is not None:
                     self.link_prediction_evaluation()
@@ -214,20 +239,40 @@ class MlmTrainer(Trainer):
                 if (self.step_kb + 1) % self.update_top_k_every == 0:
                     self.distillation.update_kb(kb=self.kb, kb_model=self.kb_model)
 
-        if self.fit_bert:
+        return self
+
+    def training_step(self, model, inputs):
+        """Training step."""
+
+        self.training_step_kb()
+        loss = 0
+        distillation_loss = 0
+
+        if self.fit_bert or self.distillation.do_distill_kg:
 
             self.step_bert += 1
+
+            model.train()
 
             inputs.pop("mask")
             entity_ids = inputs.pop("entity_ids")
             labels = inputs["labels"]
             inputs = self._prepare_inputs(inputs)
 
-            model.train()
+            if self.fit_bert:
 
-            loss, outputs = self.compute_loss(model, inputs=inputs, return_outputs=True)
+                loss, outputs = self.compute_loss(model, inputs=inputs, return_outputs=True)
 
-            if self.distill:
+                if self.args.n_gpu > 1:
+                    loss = loss.mean()
+
+            else:
+
+                outputs = model(
+                    input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"]
+                )
+
+            if self.distillation.do_distill_kg:
 
                 distillation_loss = self.distillation.distill_transe(
                     entities=entity_ids,
@@ -235,23 +280,20 @@ class MlmTrainer(Trainer):
                     labels=labels,
                 )
 
-            model = model.eval()
+                model = model.eval()
 
-            if self.args.n_gpu > 1:
-                loss = loss.mean()
-                distillation_loss = distillation_loss.mean()
+            loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
 
-            if self.distill:
-                loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
-
-            loss.backward()
+            if loss != 0:
+                loss.backward()
+                loss = loss.detach()
 
             if (self.step_bert + 1) % self.update_top_k_every == 0:
                 self.distillation.update_bert(
                     model=model, dataset=self.dataset_distillation, tokenizer=self.tokenizer
                 )
 
-        return loss.detach()
+        return loss
 
     def link_prediction(self, sample, weight, mode):
         """"Method dedicated to link prediction task."""
