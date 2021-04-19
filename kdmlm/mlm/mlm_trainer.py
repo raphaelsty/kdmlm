@@ -1,5 +1,6 @@
 import random
 
+import pandas as pd
 import torch
 from mkb import losses as mkb_losses
 from mkb import sampling as mkb_sampling
@@ -47,6 +48,8 @@ class MlmTrainer(Trainer):
     >>> model = BertForMaskedLM.from_pretrained('bert-base-uncased')
 
     >>> kb = mkb_datasets.Fb15k237(10, pre_compute = False, num_workers=0)
+    >>> kb.test = kb.test[:2]
+    >>> kb.test = kb.test[:1]
 
     >>> kb_model = mkb_models.TransE(
     ...     entities = kb.entities,
@@ -106,6 +109,7 @@ class MlmTrainer(Trainer):
     ...    fit_kb = True,
     ...    do_distill_kg = False,
     ...    do_distill_bert = True,
+    ...    path_score_kb = 'evaluation.csv',
     ... )
 
     >>> mlm_trainer.train()
@@ -135,6 +139,7 @@ class MlmTrainer(Trainer):
         do_distill_kg=True,
         seed=42,
         path_score_kb=None,
+        lr_kb=0.00005,
     ):
         super().__init__(
             model=model,
@@ -167,12 +172,10 @@ class MlmTrainer(Trainer):
 
         self.kb_optimizer = torch.optim.Adam(
             filter(lambda p: p.requires_grad, self.kb_model.parameters()),
-            lr=0.00005,
+            lr=lr_kb,
         )
 
         self.kb = kb
-        self.kb_evaluation = kb_evaluation
-        self.eval_kb_every = eval_kb_every
         self.update_top_k_every = update_top_k_every
 
         self.step_kb = 0
@@ -197,6 +200,13 @@ class MlmTrainer(Trainer):
             do_distill_kg=do_distill_kg,
             device=self.args.device,
         )
+
+        # Store kb evaluation scores
+        self.top_k_size = top_k_size
+        self.scores = []
+        self.lr_kb = lr_kb
+        self.kb_evaluation = kb_evaluation
+        self.eval_kb_every = eval_kb_every
 
     @staticmethod
     def print_scores(step, name, scores):
@@ -337,8 +347,18 @@ class MlmTrainer(Trainer):
             self.print_scores(step=self.step_kb, name="valid", scores=scores_valid)
             self.print_scores(step=self.step_kb, name="test", scores=scores_test)
 
+            if self.path_score_kb is not None:
+                self.export_to_csv(name="valid", score=scores_valid, step=self.step_kb)
+                self.export_to_csv(name="test", score=scores_test, step=self.step_kb)
+
         return self
 
-    def export_to_csv(cls, name, scores):
-
-        df.to_csv(f"{self.path_score_kb}", index=False)
+    def export_to_csv(self, name, score, step):
+        """Export scores as a csv file."""
+        score["step"] = step
+        score["alpha"] = self.alpha
+        score["name"] = name
+        score["k"] = self.top_k_size
+        score["lr_kb"] = self.lr_kb
+        self.scores.append(pd.DataFrame.from_dict(score, orient="index").T)
+        pd.concat(self.scores, axis="rows").to_csv(self.path_score_kb, index=False)
