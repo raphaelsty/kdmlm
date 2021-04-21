@@ -227,6 +227,7 @@ class MlmTrainer(Trainer):
         if self.fit_kb or self.distillation.do_distill_bert:
 
             for _ in range(self.fit_kb_n_times):
+
                 self.step_kb += 1
 
                 loss = 0
@@ -236,12 +237,15 @@ class MlmTrainer(Trainer):
                 sample, weight, mode = data["sample"], data["weight"], data["mode"]
 
                 if self.fit_kb:
+
                     loss += self.link_prediction(sample=sample, weight=weight, mode=mode)
 
                     if loss != 0:
                         self.metric_kb.update(loss.item())
 
                 if self.distillation.do_distill_bert:
+
+                    self.step_bert += 1
 
                     distillation_loss = self.distillation.distill_bert(
                         kb_model=self.kb_model,
@@ -270,13 +274,19 @@ class MlmTrainer(Trainer):
     def training_step(self, model, inputs):
         """Training step."""
 
+        if self.distillation.do_distill_bert:
+
+            if (self.step_bert + 1) % self.update_top_k_every == 0:
+
+                self.distillation.update_bert(
+                    model=model, dataset=self.dataset_distillation, tokenizer=self.tokenizer
+                )
+
         self.training_step_kb()
         loss = 0
         distillation_loss = 0
 
         if self.fit_bert or self.distillation.do_distill_kg:
-
-            self.step_bert += 1
 
             model.train()
 
@@ -294,7 +304,7 @@ class MlmTrainer(Trainer):
 
                 self.metric_bert.update(loss.item())
 
-            if not self.fit_bert and self.do_distill_kg:
+            if not self.fit_bert and self.distillation.do_distill_kg:
 
                 outputs = model(
                     input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"]
@@ -318,11 +328,6 @@ class MlmTrainer(Trainer):
             if loss != 0:
                 loss.backward()
                 loss = loss.detach()
-
-            if (self.step_bert + 1) % self.update_top_k_every == 0:
-                self.distillation.update_bert(
-                    model=model, dataset=self.dataset_distillation, tokenizer=self.tokenizer
-                )
 
         return loss
 
