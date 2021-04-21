@@ -222,7 +222,7 @@ class MlmTrainer(Trainer):
             print(f"\t{key}: {value:3f}")
         print("\n")
 
-    def training_step_kb(self):
+    def training_step_kb(self, model):
         """Update kb model."""
         if self.fit_kb or self.distillation.do_distill_bert:
 
@@ -244,6 +244,14 @@ class MlmTrainer(Trainer):
                         self.metric_kb.update(loss.item())
 
                 if self.distillation.do_distill_bert:
+
+                    if (self.step_bert + 1) % self.update_top_k_every == 0:
+
+                        self.distillation.update_bert(
+                            model=model,
+                            dataset=self.dataset_distillation,
+                            tokenizer=self.tokenizer,
+                        )
 
                     self.step_bert += 1
 
@@ -274,15 +282,7 @@ class MlmTrainer(Trainer):
     def training_step(self, model, inputs):
         """Training step."""
 
-        if self.distillation.do_distill_bert:
-
-            if (self.step_bert + 1) % self.update_top_k_every == 0:
-
-                self.distillation.update_bert(
-                    model=model, dataset=self.dataset_distillation, tokenizer=self.tokenizer
-                )
-
-        self.training_step_kb()
+        self.training_step_kb(model=model)
         loss = 0
         distillation_loss = 0
 
