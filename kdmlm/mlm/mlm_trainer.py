@@ -2,6 +2,7 @@ import random
 
 import pandas as pd
 import torch
+from creme import stats
 from mkb import losses as mkb_losses
 from mkb import sampling as mkb_sampling
 from torch.utils import data
@@ -105,9 +106,9 @@ class MlmTrainer(Trainer):
     ...    update_top_k_every = 20,
     ...    alpha = 0.3,
     ...    seed = 42,
-    ...    fit_bert = False,
+    ...    fit_bert = True,
     ...    fit_kb = True,
-    ...    do_distill_kg = False,
+    ...    do_distill_kg = True,
     ...    do_distill_bert = True,
     ...    path_score_kb = 'evaluation.csv',
     ... )
@@ -208,6 +209,11 @@ class MlmTrainer(Trainer):
         self.kb_evaluation = kb_evaluation
         self.eval_kb_every = eval_kb_every
 
+        self.metric_bert = stats.RollingMean(window_size=self.eval_kb_every)
+        self.metric_kb = stats.RollingMean(window_size=self.eval_kb_every)
+        self.metric_kb_kl = stats.RollingMean(window_size=self.eval_kb_every)
+        self.metric_bert_kl = stats.RollingMean(window_size=self.eval_kb_every)
+
     @staticmethod
     def print_scores(step, name, scores):
         print("\n")
@@ -232,12 +238,18 @@ class MlmTrainer(Trainer):
                 if self.fit_kb:
                     loss += self.link_prediction(sample=sample, weight=weight, mode=mode)
 
+                    if loss != 0:
+                        self.metric_kb.update(loss.item())
+
                 if self.distillation.do_distill_bert:
 
                     distillation_loss = self.distillation.distill_bert(
                         kb_model=self.kb_model,
                         sample=sample,
                     )
+
+                    if distillation_loss != 0:
+                        self.metric_kb_kl.update(distillation_loss.item())
 
                 loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
 
@@ -280,7 +292,9 @@ class MlmTrainer(Trainer):
                 if self.args.n_gpu > 1:
                     loss = loss.mean()
 
-            else:
+                self.metric_bert.update(loss.item())
+
+            if not self.fit_bert and self.do_distill_kg:
 
                 outputs = model(
                     input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"]
@@ -293,6 +307,9 @@ class MlmTrainer(Trainer):
                     logits=outputs.logits,
                     labels=labels,
                 )
+
+                if distillation_loss != 0:
+                    self.metric_bert_kl.update(distillation_loss.item())
 
                 model = model.eval()
 
@@ -360,5 +377,9 @@ class MlmTrainer(Trainer):
         score["name"] = name
         score["k"] = self.top_k_size
         score["lr_kb"] = self.lr_kb
+        score["bert_kl"] = self.metric_bert_kl.get()
+        score["kb_kl"] = self.metric_kb_kl.get()
+        score["bert_loss"] = self.metric_bert.get()
+        score["kb_loss"] = self.metric_kb.get()
         self.scores.append(pd.DataFrame.from_dict(score, orient="index").T)
         pd.concat(self.scores, axis="rows").to_csv(self.path_score_kb, index=False)
