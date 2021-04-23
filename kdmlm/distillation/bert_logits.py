@@ -97,6 +97,8 @@ class BertLogits:
             tokenizer=tokenizer, max_tokens=self.max_tokens, entities=entities
         )
 
+        self.order = self.order.to(self.device)
+
         self.logits = self.update(model=model, tokenizer=tokenizer, dataset=dataset)
 
     def update(self, model, tokenizer, dataset):
