@@ -64,6 +64,7 @@ class Distillation:
     ...     entities = kb.entities,
     ...     k = 3,
     ...     n = 1000,
+    ...     max_tokens = 1,
     ...     device = device,
     ... )
 
@@ -77,7 +78,7 @@ class Distillation:
     ...     kb_model = kb_model,
     ...     sample = sample,
     ... )
-    tensor(0.1475, grad_fn=<AddBackward0>)
+    tensor(0.2073, grad_fn=<AddBackward0>)
 
     >>> entities = {value: key for key, value in kb.entities.items()}
 
@@ -176,6 +177,7 @@ class Distillation:
         n,
         do_distill_bert=True,
         do_distill_kg=True,
+        max_tokens=15,
         device="cuda",
         seed=42,
     ):
@@ -192,6 +194,7 @@ class Distillation:
                 entities=entities,
                 k=k,
                 n=n,
+                max_tokens=max_tokens,
                 device=self.device,
             )
 

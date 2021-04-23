@@ -5,7 +5,7 @@ import collections
 import torch
 import tqdm
 
-from ..utils import distillation_index, expand_bert_logits
+from ..utils import bert_top_k, distillation_index, expand_bert_logits, mapping_entities
 
 
 class BertLogits:
@@ -43,11 +43,13 @@ class BertLogits:
     ...     batch_size = 6,
     ... )
 
+    >>> kb = kb.Fb15k237(1, pre_compute=False)
+
     >>> distillation = distillation.BertLogits(
     ...     model = model,
     ...     dataset = dataset,
     ...     tokenizer = tokenizer,
-    ...     entities = kb.Fb15k237(1, pre_compute=False).entities,
+    ...     entities = kb.entities,
     ...     k = 4,
     ...     n = 1000,
     ...     device = "cpu"
@@ -59,18 +61,42 @@ class BertLogits:
     >>> logits, index = distillation.logits[11839][0]
 
     >>> torch.round(logits)
-    tensor([ 8.,  8.,  8.,  8., -2.,  0.,  4.,  1.])
+    tensor([ 7.,  7.,  7.,  7.,  0., -6., -5., -5.])
 
     >>> index
-    tensor([ 1166, 13596, 10039, 11737,  9133, 13765,  1840,   617])
+    tensor([ 9481,   753,  4931,  2293,  9133, 13765,  1840,   617])
+
+    >>> e = {v: k for k, v in kb.entities.items()}
+
+    >>> e[11839]
+    'Zachary Taylor'
+
+    >>> for i in index:
+    ...     print(e[i.item()])
+    John Abraham
+    Richard Benjamin
+    Henry James
+    William James
+    Texas A&M University
+    Liberal Party of Australia
+    Anthony Burgess
+    The Devil's Double
 
     """
 
-    def __init__(self, model, tokenizer, dataset, entities, k=100, n=1000, device="cuda"):
+    def __init__(
+        self, model, tokenizer, dataset, entities, k=100, n=1000, max_tokens=15, device="cuda"
+    ):
         self.k = k
         self.n = n
+        self.max_tokens = max_tokens
         self.device = device
-        self.kg_entities, self.bert_entities = distillation_index(tokenizer, entities)
+        self.kg_entities, _ = distillation_index(tokenizer, entities)
+
+        self.tokens, self.order = mapping_entities(
+            tokenizer=tokenizer, max_tokens=self.max_tokens, entities=entities
+        )
+
         self.logits = self.update(model=model, tokenizer=tokenizer, dataset=dataset)
 
     def update(self, model, tokenizer, dataset):
@@ -114,18 +140,20 @@ class BertLogits:
             entity_ids: Entities of the input sentences.
 
         """
-        output = model(
+        outputs = model(
             input_ids.to(self.device),
             attention_mask=attention_mask.to(self.device),
         )
 
-        logits = expand_bert_logits(
-            logits=output.logits,
-            labels=labels.to(self.device),
-            bert_entities=self.bert_entities.to(self.device),
-        )
+        logits = outputs.logits[labels != -100]
 
-        top_k = torch.argsort(logits, dim=1, descending=True)[:, 0 : self.k]
+        top_k_logits, top_k = bert_top_k(
+            logits=logits,
+            tokens=self.tokens,
+            order=self.order,
+            max_tokens=self.max_tokens,
+            k=self.k,
+        )
 
         random_k = torch.randint(
             low=0, high=len(self.kg_entities) - 1, size=(logits.shape[0], self.k)
@@ -133,10 +161,8 @@ class BertLogits:
 
         for i, entity in enumerate(entity_ids):
 
-            top_k_logits = torch.index_select(logits[i], 0, top_k[i])
-
             random_k_logits = torch.index_select(logits[i], 0, random_k[i])
 
-            yield entity.item(), torch.cat([top_k_logits, random_k_logits]), torch.cat(
+            yield entity.item(), torch.cat([top_k_logits[i], random_k_logits]), torch.cat(
                 [top_k[i], random_k[i]]
             )

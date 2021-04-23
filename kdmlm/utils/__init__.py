@@ -1,17 +1,21 @@
 from .distillation import (
+    bert_top_k,
     distillation_index,
     expand_bert_logits,
     get_tensor_distillation,
     index,
+    mapping_entities,
 )
 from .filter import filter_entities
 from .wiki_process import WikiProcess
 
 __all__ = [
+    "bert_top_k",
     "distillation_index",
     "expand_bert_logits",
     "get_tensor_distillation",
     "filter_entities",
     "index",
+    "mapping_entities",
     "WikiProcess",
 ]
