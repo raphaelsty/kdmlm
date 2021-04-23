@@ -134,6 +134,7 @@ class MlmTrainer(Trainer):
         top_k_size=100,
         update_top_k_every=1000,
         fit_kb_n_times=1,
+        max_tokens=15,
         fit_bert=True,
         fit_kb=True,
         do_distill_bert=True,
@@ -199,6 +200,7 @@ class MlmTrainer(Trainer):
             n=n,
             do_distill_bert=do_distill_bert,
             do_distill_kg=do_distill_kg,
+            max_tokens=max_tokens,
             device=self.args.device,
         )
 
