@@ -209,7 +209,7 @@ def mapping_entities(tokenizer, max_tokens, entities):
     return tokens, order
 
 
-def bert_top_k(logits, tokens, order, max_tokens, k):
+def bert_top_k(logits, tokens, order, max_tokens, k, device="cuda"):
     """Retrieve entities depending on the context.
 
     Parameters
@@ -261,7 +261,7 @@ def bert_top_k(logits, tokens, order, max_tokens, k):
     ...     logits = outputs.logits[sample["labels"] != -100]
 
     >>> scores, candidates = utils.bert_top_k(
-    ...     logits=logits, tokens=tokens, order=order, max_tokens=15, k=10)
+    ...     logits=logits, tokens=tokens, order=order, max_tokens=15, k=10, device = 'cpu')
 
     >>> e = {value: key for key, value in kb.entities.items()}
 
@@ -288,11 +288,11 @@ def bert_top_k(logits, tokens, order, max_tokens, k):
     scores = []
 
     for i in range(1, max_tokens + 1):
-        index = torch.tensor(tokens[i][0])
+        index = torch.tensor(tokens[i][0]).to(device)
         p_e_c = torch.index_select(logits, 1, index) / i
 
         for j in range(1, i):
-            index = torch.tensor(tokens[i][j])
+            index = torch.tensor(tokens[i][j]).to(device)
             p_e_c += torch.index_select(logits, 1, index) / i
         scores.append(p_e_c)
 

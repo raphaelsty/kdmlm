@@ -153,6 +153,7 @@ class BertLogits:
             order=self.order,
             max_tokens=self.max_tokens,
             k=self.k,
+            device=self.device,
         )
 
         random_k = torch.randint(
