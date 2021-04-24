@@ -28,7 +28,7 @@ class LoadFromFile:
     @classmethod
     def load(cls, path):
         """Load txt file."""
-        file = open(path, "r+", encoding="utf-8")
+        file = open(path, "r", encoding="utf-8", errors="ignore")
         return file.readlines()
 
 
