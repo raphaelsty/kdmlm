@@ -7,6 +7,7 @@ from .distillation import (
     mapping_entities,
 )
 from .filter import filter_entities
+from .perplexity import perplexity
 from .wiki_process import WikiProcess
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     "filter_entities",
     "index",
     "mapping_entities",
+    "perplexity",
     "WikiProcess",
 ]

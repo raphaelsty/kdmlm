@@ -1,3 +1,4 @@
+import os
 import random
 
 import pandas as pd
@@ -141,6 +142,7 @@ class MlmTrainer(Trainer):
         do_distill_kg=True,
         seed=42,
         path_score_kb=None,
+        path_model_kb=None,
         lr_kb=0.00005,
     ):
         super().__init__(
@@ -158,6 +160,7 @@ class MlmTrainer(Trainer):
         self.fit_kb = fit_kb
         self.fit_kb_n_times = fit_kb_n_times
 
+        self.path_model_kb = path_model_kb
         self.path_score_kb = path_score_kb
         self.results = []
 
@@ -374,6 +377,12 @@ class MlmTrainer(Trainer):
             if self.path_score_kb is not None:
                 self.export_to_csv(name="valid", score=scores_valid, step=self.step_kb)
                 self.export_to_csv(name="test", score=scores_test, step=self.step_kb)
+
+            if self.path_model_kb is not None:
+                self.kb_model.cpu().save(
+                    os.path.join(self.path_model_kb, f"{self.kb_model.name}_{self.step_kb}")
+                )
+                self.kb_model.to(self.args.device)
 
         return self
 
