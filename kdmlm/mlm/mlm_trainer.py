@@ -164,6 +164,10 @@ class MlmTrainer(Trainer):
         self.path_score_kb = path_score_kb
         self.results = []
 
+        if self.path_model_kb is not None:
+            if not os.path.exists(self.path_model_kb):
+                os.makedirs(self.path_model_kb)
+
         random.seed(seed)
 
         # Link prediction task
