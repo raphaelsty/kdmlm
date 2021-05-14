@@ -142,9 +142,9 @@ class BertLogits:
                 with torch.no_grad():
                     for entity, l, index in self._top_k(model=model, **sample):
                         if entity in self.filter_entities:
-                            bar.update(1)
                             logits[entity].append((l, index))
                             n_entity += 1
+                    bar.update(1)
 
                 bar.set_description(
                     f"Updating Bert logits, {n_entity} distributions, {len(logits)} entities. {tot}"
