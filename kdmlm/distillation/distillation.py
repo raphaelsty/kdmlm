@@ -1,5 +1,6 @@
 __all__ = ["Distillation"]
 
+import collections
 import random
 
 import torch
@@ -63,8 +64,9 @@ class Distillation:
     ...     tokenizer = tokenizer,
     ...     entities = kb.entities,
     ...     k = 3,
-    ...     n = 1000,
+    ...     n = 10,
     ...     max_tokens = 1,
+    ...     subwords_limit = 15,
     ...     device = device,
     ... )
 
@@ -74,27 +76,34 @@ class Distillation:
     ...    [11838, 2, 12]
     ... ])
 
+    >>> distillation.distill_bert_wiki(
+    ...    kb_model = kb_model,
+    ...    entity_ids = torch.tensor([[11839, 11190, 11838]]),
+    ...    mode = "head-batch",
+    ... )
+    tensor(0.2468, grad_fn=<AddBackward0>)
+
     >>> distillation.distill_bert(
     ...     kb_model = kb_model,
     ...     sample = sample,
     ... )
-    tensor(0.2073, grad_fn=<AddBackward0>)
+    tensor(0.2293, grad_fn=<AddBackward0>)
 
     >>> entities = {value: key for key, value in kb.entities.items()}
 
-    >>> entities[574]
-    'Sean Penn'
+    >>> entities[12680]
+    'Brian Austin Green'
 
-    >>> entities[1239]
-    'The Interpreter'
+    >>> entities[1926]
+    'domestic partnership'
 
-    >>> entities[11274]
-    "Barney's Version"
+    >>> entities[8143]
+    'Gene Stupnitsky'
 
     >>> sentences = [
-    ...     ("| Sean Penn | is the son of actor and director Leo Penn.", 574),
-    ...     ("| The Interpreter | is a 2005 political thriller.", 1239),
-    ...     ("| Barney's Version | is a 2010 Canadian comedy-drama film.", 11274)
+    ...     ("| Sean Penn | is the fist entity.", 12680),
+    ...     ("| The Interpreter | is the second entity.", 1926),
+    ...     ("| Barney's Version | is third entity.", 8143)
     ... ]
 
     >>> dataset = data.DataLoader(
@@ -115,12 +124,14 @@ class Distillation:
     ...     attention_mask = sample["attention_mask"],
     ... )
 
+    >>> entities = {value: key for key, value in kb.entities.items()}
+
     >>> distillation.distill_transe(
     ...     entities = sample["entity_ids"],
     ...     logits = output.logits,
     ...     labels = sample["labels"],
     ... )
-    tensor(0.2684, grad_fn=<AddBackward0>)
+    tensor(0.1978, grad_fn=<AddBackward0>)
 
     >>> candidates  = torch.tensor([11953,  8827,  7336,  2674,  4347,  9020])
 
@@ -130,6 +141,8 @@ class Distillation:
     ...     relation = 0,
     ...     tail = 1,
     ...     mode = 'head-batch',
+    ...     heads = distillation.heads,
+    ...     tails = distillation.tails,
     ... )
     tensor([[11953,     0,     1],
             [ 8827,     0,     1],
@@ -144,6 +157,8 @@ class Distillation:
     ...     relation = 0,
     ...     tail = 1,
     ...     mode = 'tail-batch',
+    ...     heads = distillation.heads,
+    ...     tails = distillation.tails,
     ... )
     tensor([[  574,     0, 11953],
             [  574,     0,  8827],
@@ -178,6 +193,8 @@ class Distillation:
         do_distill_bert=True,
         do_distill_kg=True,
         max_tokens=15,
+        wiki_mode=True,
+        subwords_limit=15,
         device="cuda",
         seed=42,
     ):
@@ -195,35 +212,59 @@ class Distillation:
                 k=k,
                 n=n,
                 max_tokens=max_tokens,
+                subwords_limit=subwords_limit,
                 device=self.device,
             )
 
         if self.do_distill_kg:
 
             self.kb_logits = KbLogits(
-                model=kb_model, dataset=kb, entities=kb.entities, k=k, n=n, device=self.device
+                model=kb_model,
+                dataset=kb,
+                tokenizer=tokenizer,
+                entities=kb.entities,
+                k=k,
+                n=n,
+                device=self.device,
+                subwords_limit=subwords_limit,
             )
 
         self.heads, self.tails = get_tensor_distillation([_ for _ in range(k * 2)])
-        self.bert_entities, _ = distillation_index(tokenizer=tokenizer, entities=entities)
+        self.bert_entities, self.kb_entities = distillation_index(
+            tokenizer=tokenizer,
+            entities=entities,
+            subwords_limit=subwords_limit,
+        )
         self.bert_entities = self.bert_entities.to(self.device)
+
+        if wiki_mode:
+
+            self.triples = {
+                "head-batch": collections.defaultdict(list),
+                "tail-batch": collections.defaultdict(list),
+            }
+
+            for h, r, t in kb.train:
+                self.triples["head-batch"][h].append((h, r, t))
+                self.triples["tail-batch"][t].append((h, r, t))
 
         random.seed(42)
 
-    def distillation_sample(self, candidates, head, relation, tail, mode):
+    @staticmethod
+    def distillation_sample(candidates, head, relation, tail, mode, heads, tails):
         if mode == "head-batch":
-            self.heads[:, 0] = candidates
-            self.heads[:, 1] = relation
-            self.heads[:, 2] = tail
-            return self.heads.clone().detach()
+            heads[:, 0] = candidates
+            heads[:, 1] = relation
+            heads[:, 2] = tail
+            return heads.clone().detach()
         else:
-            self.tails[:, 0] = head
-            self.tails[:, 1] = relation
-            self.tails[:, 2] = candidates
-            return self.tails.clone().detach()
+            tails[:, 0] = head
+            tails[:, 1] = relation
+            tails[:, 2] = candidates
+            return tails.clone().detach()
 
     def distill_bert(self, kb_model, sample):
-        """Distill Bert to TransE."""
+        """Distill Bert to TransE from knowledge base."""
         samples, teacher_score = [], []
 
         if self.do_distill_bert:
@@ -237,7 +278,13 @@ class Distillation:
                     teacher_score.append(l)
                     samples.append(
                         self.distillation_sample(
-                            candidates=c, head=h, relation=r, tail=t, mode="head-batch"
+                            candidates=c,
+                            head=h,
+                            relation=r,
+                            tail=t,
+                            mode="head-batch",
+                            heads=self.heads,
+                            tails=self.tails,
                         )
                     )
 
@@ -246,11 +293,55 @@ class Distillation:
                     teacher_score.append(l)
                     samples.append(
                         self.distillation_sample(
-                            candidates=c, head=h, relation=r, tail=t, mode="tail-batch"
+                            candidates=c,
+                            head=h,
+                            relation=r,
+                            tail=t,
+                            mode="tail-batch",
+                            heads=self.heads,
+                            tails=self.tails,
                         )
                     )
 
         loss = 0
+        if teacher_score:
+            teacher_score = torch.stack(teacher_score, dim=0)
+            student_score = kb_model(torch.stack(samples, dim=0).to(self.device))
+            loss += self.kl_divergence(teacher_score=teacher_score, student_score=student_score)
+
+        return loss
+
+    def distill_bert_wiki(self, kb_model, entity_ids, mode):
+        """
+        Distill Bert to TransE from wikipedia entities.
+        """
+        samples, teacher_score = [], []
+
+        for e in entity_ids.flatten():
+
+            e = e.item()
+
+            if e in self.triples[mode] and e in self.bert_logits.logits:
+
+                head, relation, tail = random.choice(self.triples[mode][e])
+                logits, candidates = random.choice(self.bert_logits.logits[e])
+
+                teacher_score.append(logits)
+
+                sample = self.distillation_sample(
+                    candidates=candidates,
+                    head=head,
+                    relation=relation,
+                    tail=tail,
+                    mode=mode,
+                    heads=self.heads,
+                    tails=self.tails,
+                )
+
+                samples.append(sample)
+
+        loss = 0
+
         if teacher_score:
             teacher_score = torch.stack(teacher_score, dim=0)
             student_score = kb_model(torch.stack(samples, dim=0).to(self.device))

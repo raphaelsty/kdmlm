@@ -19,22 +19,23 @@ class KDDataset(Dataset):
     --------
 
     >>> import pathlib
+
     >>> from pprint import pprint
 
     >>> from kdmlm import datasets
-    >>> from torch.utils.data import DataLoader
-    >>> from transformers import BertTokenizer
-
     >>> from mkb import datasets as mkb_datasets
+
+    >>> from torch.utils.data import DataLoader
 
     >>> folder = pathlib.Path(__file__).parent.joinpath('./../datasets/sentences')
 
+    >>> from transformers import BertTokenizer
     >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     >>> entities = mkb_datasets.Fb15k237(1, pre_compute=False).entities
 
     >>> dataset = datasets.KDDataset(
-    ...     dataset=datasets.LoadFromFolder(folder=folder, entities=entities),
+    ...     dataset=datasets.LoadFromFolder(folder=folder, entities=entities, tokenizer=tokenizer),
     ...     tokenizer=tokenizer,
     ...     sep='|'
     ... )
@@ -103,7 +104,7 @@ class KDDataset(Dataset):
         Parameters:
         -----------
             sentence (list): Tokenized sentence.
-            input_ids (list): 
+            input_ids (list):
             n_masks (int): Fixed number of mask tokens to use to replace input entity.
 
         Example:
@@ -130,7 +131,7 @@ class KDDataset(Dataset):
         >>> x = dataset.get_mask_labels_ids(
         ...    sentence = tokenizer.tokenize(sentence),
         ...    input_ids = tokenizer.encode(sentence)
-        ... ) 
+        ... )
 
         >>> pprint(x)
         {'input_ids': [101,
@@ -262,7 +263,7 @@ class KDDataset(Dataset):
         >>> tokenizer.decode(x['input_ids'])
         '<s> Renault Zoe<mask><mask><mask> cars are fun to drive on French roads.</s>'
 
-        >>> assert len(x['input_ids']) == len(x['mask']) and len(x['mask']) == len(x['labels']) 
+        >>> assert len(x['input_ids']) == len(x['mask']) and len(x['mask']) == len(x['labels'])
 
         """
         mask, labels = [], []
@@ -308,7 +309,7 @@ class KDDataset(Dataset):
                 if n_masks is not None:
                     if entities and n_masked > n_masks:
                         continue
-                
+
                 ids.append(input_id)
                 mask.append(entities)
 

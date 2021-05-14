@@ -12,7 +12,7 @@ __all__ = [
 ]
 
 
-def distillation_index(tokenizer, entities):
+def distillation_index(tokenizer, entities, subwords_limit):
     """Return ids of entities in the KB and in Bert.
     Useful to expand logits of berts.
 
@@ -33,8 +33,11 @@ def distillation_index(tokenizer, entities):
         >>> dataset = datasets.Fb15k237(1, pre_compute=False)
         >>> entities_kb, entities_bert = utils.distillation_index(
         ...    tokenizer=tokenizer,
-        ...    entities=dataset.entities
+        ...    entities=dataset.entities,
+        ...    subwords_limit = 2,
         ... )
+
+        >>> assert len(entities_bert) == len(entities_kb)
 
         >>> tokenizer.decode([entities_bert[0]])
         'dominican'
@@ -43,10 +46,13 @@ def distillation_index(tokenizer, entities):
         'Dominican Republic'
 
     """
-    entities_to_bert = {
-        id_e: tokenizer.decode([tokenizer.encode(e, add_special_tokens=False)[0]])
-        for e, id_e in entities.items()
-    }
+
+    entities_to_bert = {}
+    for e, id_e in entities.items():
+        e = tokenizer.encode(e, add_special_tokens=False)
+        if len(e) <= subwords_limit:
+            entities_to_bert[id_e] = tokenizer.decode([e[0]])
+
     mapping_kb_bert = {
         id_e: tokenizer.encode(e, add_special_tokens=False)[0]
         for id_e, e in entities_to_bert.items()

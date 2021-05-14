@@ -5,7 +5,7 @@ import collections
 import torch
 import tqdm
 
-from ..utils import get_tensor_distillation
+from ..utils import distillation_index, get_tensor_distillation
 
 
 class KbLogits:
@@ -21,9 +21,12 @@ class KbLogits:
     Examples
     --------
 
-    >>> from mkb import models
     >>> from kdmlm import distillation
+
+    >>> from mkb import models
     >>> from mkb import datasets
+
+    >>> from transformers import DistilBertTokenizer
 
     >>> import torch
     >>> _ = torch.manual_seed(42)
@@ -37,52 +40,99 @@ class KbLogits:
     ...    gamma = 5,
     ... )
 
+    >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+
     >>> kb_logits = distillation.KbLogits(
     ...     dataset = dataset,
     ...     model = model,
     ...     entities = dataset.entities,
-    ...     k = 2,
+    ...     tokenizer = tokenizer,
+    ...     subwords_limit = 1,
+    ...     k = 1,
     ...     n = 1000,
     ...     device = 'cpu'
     ... )
 
     >>> len(kb_logits.logits.keys())
-    876
+    122
 
     """
 
-    def __init__(self, dataset, model, entities, k=100, n=1000, device="cuda"):
+    def __init__(self, dataset, model, entities, tokenizer, subwords_limit, k, n, device):
         self.k = k
         self.n = n
         self.device = device
         self.n_entities = len(entities)
-        self.heads, self.tails = get_tensor_distillation([_ for _ in range(self.n_entities)])
+
+        kb_entities, _ = distillation_index(
+            tokenizer=tokenizer, entities=entities, subwords_limit=subwords_limit
+        )
+
+        # Entities filtered with subwords_limit
+        self.filter_entities = {e.item(): True for e in kb_entities}
+
+        self.heads, self.tails = get_tensor_distillation(kb_entities)
+
         self.logits = self.update(dataset=dataset, model=model)
 
     def update(self, dataset, model):
         logits = collections.defaultdict(list)
 
+        n_entity = 0
+
         bar = tqdm.tqdm(
             range(min(self.n // dataset.batch_size, len(dataset.train))),
-            desc="Updating kb logits",
+            desc=f"Updating kb logits, {n_entity} distributions, {len(logits)} entities.",
             position=0,
         )
 
-        for _ in bar:
+        with torch.no_grad():
 
-            sample = next(dataset)["sample"]
+            for _ in bar:
 
-            with torch.no_grad():
+                sample = next(dataset)["sample"]
 
-                for h, t, heads_score, tails_score, heads_index, tails_index in self._top_k(
-                    model, sample
-                ):
-                    logits[h].append((heads_score, heads_index))
-                    logits[t].append((tails_score, tails_index))
+                for h, r, t in sample:
+
+                    h, r, t = h.item(), r.item(), t.item()
+
+                    if h in self.filter_entities:
+
+                        score, index = self._top_k(
+                            model=model,
+                            h=h,
+                            r=r,
+                            t=t,
+                            tensor_distillation=self.heads,
+                            mode="head-batch",
+                        )
+
+                        logits[h].append((score, index))
+
+                        n_entity += 1
+
+                    if t in self.filter_entities:
+
+                        score, index = self._top_k(
+                            model=model,
+                            h=h,
+                            r=r,
+                            t=t,
+                            tensor_distillation=self.tails,
+                            mode="tail-batch",
+                        )
+
+                        logits[t].append((score, index))
+
+                        n_entity += 1
+
+                bar.set_description(
+                    f"Updating kb logits, {n_entity} distributions, {len(logits)} entities."
+                )
 
         return logits
 
-    def _top_k(self, model, sample):
+    def _top_k(self, model, h, r, t, tensor_distillation, mode):
         """Compute top k plus random k for heads and tails of an input sample of triplets.
 
         Parameters
@@ -93,9 +143,12 @@ class KbLogits:
         Examples
         --------
 
-        >>> from mkb import models
         >>> from kdmlm import distillation
+
+        >>> from mkb import models
         >>> from mkb import datasets
+
+        >>> from transformers import DistilBertTokenizer
 
         >>> import torch
         >>> _ = torch.manual_seed(42)
@@ -109,10 +162,14 @@ class KbLogits:
         ...    gamma = 5,
         ... )
 
+        >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+
         >>> kb_logits = distillation.KbLogits(
         ...     dataset = dataset,
         ...     model = model,
         ...     entities = dataset.entities,
+        ...     tokenizer = tokenizer,
+        ...     subwords_limit = 2,
         ...     k = 2,
         ...     n = 10,
         ...     device = 'cpu'
@@ -122,63 +179,58 @@ class KbLogits:
         ...    [ 2067,    17, 13044],
         ...    [ 4867,   140,  1984]])
 
-        >>> for h, t, heads_score, tails_score, heads_index, tails_index in kb_logits._top_k(
-        ...     model = model, sample = sample):
-        ...     break
+        >>> logits, index  = kb_logits._top_k(model = model, h = 2067, r = 17, t = 13044,
+        ...     tensor_distillation = kb_logits.heads, mode = "head-batch")
 
-        >>> h
-        2067
+        >>> logits
+        tensor([ 2.8958,  2.3543, -2.8897, -0.6057], grad_fn=<IndexSelectBackward>)
 
-        >>> t
-        13044
+        >>> index
+        tensor([ 8722,   976, 11999, 10242])
 
-        >>> heads_score
-        tensor([ 2.8958,  2.6915, -0.7853, -1.7397], grad_fn=<IndexSelectBackward>)
+        >>> logits, index = kb_logits._top_k(model = model, h = 2067, r = 17, t = 13044,
+        ...     tensor_distillation = kb_logits.tails, mode = "tail-batch")
 
-        >>> tails_score
-        tensor([ 2.9989,  2.8445, -1.2583, -0.8696], grad_fn=<IndexSelectBackward>)
+        >>> logits
+        tensor([ 2.7046,  2.5926, -1.4249,  0.2401], grad_fn=<IndexSelectBackward>)
 
-        >>> heads_index
-        tensor([ 8722, 10923,  1302,  3299])
-
-        >>> tails_index
-        tensor([9239, 5352, 7835, 5895])
-
-        >>> model(torch.tensor([[2067, 17, 9239]]))
-        tensor([[2.9989]], grad_fn=<ViewBackward>)
+        >>> index
+        tensor([ 2655, 13315,  6234,  3326])
 
         >>> model(torch.tensor([[8722, 17, 13044]]))
         tensor([[2.8958]], grad_fn=<ViewBackward>)
 
+        >>> model(torch.tensor([[2067, 17, 2655]]))
+        tensor([[2.7046]], grad_fn=<ViewBackward>)
+
         """
-        for h, r, t in sample:
+        tensor_distillation[:, 1] = r
 
-            h, r, t = h.item(), r.item(), t.item()
+        if mode == "head-batch":
+            tensor_distillation[:, 2] = t
 
-            self.heads[:, 1] = r
-            self.heads[:, 2] = t
+        elif mode == "tail-batch":
+            tensor_distillation[:, 0] = h
 
-            self.tails[:, 0] = h
-            self.tails[:, 1] = r
+        score = model(tensor_distillation.to(self.device)).flatten()
 
-            heads_score = model(self.heads.to(self.device)).flatten()
-            tails_score = model(self.tails.to(self.device)).flatten()
+        # Concatenate top k index and random k index
+        index = torch.cat(
+            [
+                torch.argsort(score, dim=0, descending=True)[: self.k],
+                torch.randint(low=0, high=len(tensor_distillation) - 1, size=(self.k,)).to(
+                    self.device
+                ),
+            ]
+        )
 
-            heads_index = torch.cat(
-                [
-                    torch.argsort(heads_score, dim=0, descending=True)[: self.k],
-                    torch.randint(low=0, high=self.n_entities - 1, size=(self.k,)).to(self.device),
-                ]
-            )
+        score = torch.index_select(score, 0, index)
 
-            tails_index = torch.cat(
-                [
-                    torch.argsort(tails_score, dim=0, descending=True)[: self.k],
-                    torch.randint(low=0, high=self.n_entities - 1, size=(self.k,)).to(self.device),
-                ]
-            )
+        # Retrieve entities from top k index.
+        index = torch.index_select(
+            tensor_distillation[:, 0] if mode == "head-batch" else tensor_distillation[:, 2],
+            0,
+            index,
+        ).to(self.device)
 
-            heads_score = torch.index_select(heads_score, 0, heads_index.to(self.device))
-            tails_score = torch.index_select(tails_score, 0, tails_index.to(self.device))
-
-            yield h, t, heads_score, tails_score, heads_index, tails_index
+        return score, index

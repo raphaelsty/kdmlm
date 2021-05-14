@@ -5,7 +5,7 @@ import collections
 import torch
 import tqdm
 
-from ..utils import bert_top_k, distillation_index, expand_bert_logits, mapping_entities
+from ..utils import bert_top_k, distillation_index, mapping_entities
 
 
 class BertLogits:
@@ -52,50 +52,65 @@ class BertLogits:
     ...     entities = kb.entities,
     ...     k = 4,
     ...     n = 1000,
-    ...     device = "cpu"
+    ...     device = "cpu",
+    ...     max_tokens = 15,
+    ...     subwords_limit = 10,
     ... )
 
     >>> len(distillation.logits.keys())
     72
 
-    >>> logits, index = distillation.logits[11839][0]
+    >>> logits, index = distillation.logits[1197][0]
 
     >>> torch.round(logits)
-    tensor([ 7.,  7.,  7.,  7.,  0., -6., -5., -5.])
+    tensor([10., 10.,  9.,  9.,  2.,  1., -3., -2.])
 
     >>> index
-    tensor([ 9481,   753,  4931,  2293,  9133, 13765,  1840,   617])
+    tensor([ 4688,  4497,  3411,   591, 11929, 11130,  8086,  2208])
 
     >>> e = {v: k for k, v in kb.entities.items()}
 
-    >>> e[11839]
-    'Zachary Taylor'
+    >>> e[4688]
+    'Liberia'
 
     >>> for i in index:
     ...     print(e[i.item()])
-    John Abraham
-    Richard Benjamin
-    Henry James
-    William James
-    Texas A&M University
-    Liberal Party of Australia
-    Anthony Burgess
-    The Devil's Double
+    Liberia
+    Niger
+    Sudan
+    Nigeria
+    Kumasi
+    Eton College
+    Queen Mary, University of London
+    Emile Hirsch
 
     """
 
     def __init__(
-        self, model, tokenizer, dataset, entities, k=100, n=1000, max_tokens=15, device="cuda"
+        self,
+        model,
+        tokenizer,
+        dataset,
+        entities,
+        max_tokens,
+        subwords_limit,
+        k,
+        n,
+        device,
     ):
         self.k = k
         self.n = n
         self.max_tokens = max_tokens
         self.device = device
-        self.kg_entities, _ = distillation_index(tokenizer, entities)
+        self.kb_entities, _ = distillation_index(
+            tokenizer=tokenizer, entities=entities, subwords_limit=subwords_limit
+        )
 
         self.tokens, self.order = mapping_entities(
             tokenizer=tokenizer, max_tokens=self.max_tokens, entities=entities
         )
+
+        self.filter_entities = {e.item(): True for e in self.kb_entities}
 
         self.order = self.order.to(self.device)
 
@@ -112,19 +127,28 @@ class BertLogits:
             dataset: kdmlm.KdDataset.
 
         """
+        n_entity = 0
+        tot = 0
         logits = collections.defaultdict(list)
+
         bar = tqdm.tqdm(
             range(min(self.n // dataset.batch_size, len(dataset))),
-            desc="Updating bert logits",
+            desc=f"Updating Bert logits, {n_entity} distributions, {len(logits)} entities.",
             position=0,
         )
-        dataset = iter(dataset)
 
-        for _ in bar:
-            sample = next(dataset)
-            with torch.no_grad():
-                for entity, l, index in self._top_k(model=model, **sample):
-                    logits[entity].append((l, index))
+        with bar:
+            for sample in dataset:
+                with torch.no_grad():
+                    for entity, l, index in self._top_k(model=model, **sample):
+                        if entity in self.filter_entities:
+                            bar.update(1)
+                            logits[entity].append((l, index))
+                            n_entity += 1
+
+                bar.set_description(
+                    f"Updating Bert logits, {n_entity} distributions, {len(logits)} entities. {tot}"
+                )
 
         return logits
 
@@ -135,7 +159,6 @@ class BertLogits:
         ----------
             model: HuggingFace model.
             bert_entities: Torch tensor of entities index.
-            kg_entities: Torch tensor of entities index.
             input_ids:  Input sentence ids.
             attention_mask: Input sample attention mask.
             labels: Input sample targets.
@@ -159,7 +182,7 @@ class BertLogits:
         )
 
         random_k = torch.randint(
-            low=0, high=len(self.kg_entities) - 1, size=(logits.shape[0], self.k)
+            low=0, high=len(self.kb_entities) - 1, size=(logits.shape[0], self.k)
         ).to(self.device)
 
         for i, entity in enumerate(entity_ids):

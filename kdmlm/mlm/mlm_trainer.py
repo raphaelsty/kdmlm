@@ -7,8 +7,10 @@ from creme import stats
 from mkb import losses as mkb_losses
 from mkb import sampling as mkb_sampling
 from torch.utils import data
+from torch.utils.data import DataLoader
 from transformers import Trainer
 
+from ..datasets import Collator, KDDataset, LoadFromFolder
 from ..distillation import Distillation
 
 __all__ = ["MlmTrainer"]
@@ -111,6 +113,7 @@ class MlmTrainer(Trainer):
     ...    fit_kb = True,
     ...    do_distill_kg = True,
     ...    do_distill_bert = True,
+    ...    wiki_mode=True,
     ...    path_score_kb = 'evaluation.csv',
     ... )
 
@@ -136,6 +139,7 @@ class MlmTrainer(Trainer):
         update_top_k_every=1000,
         fit_kb_n_times=1,
         max_tokens=15,
+        subwords_limit=15,  # Maximum number of sub words to consider an entity.
         fit_bert=True,
         fit_kb=True,
         do_distill_bert=True,
@@ -144,6 +148,7 @@ class MlmTrainer(Trainer):
         path_score_kb=None,
         path_model_kb=None,
         lr_kb=0.00005,
+        wiki_mode=True,
     ):
         super().__init__(
             model=model,
@@ -151,6 +156,17 @@ class MlmTrainer(Trainer):
             data_collator=data_collator,
             train_dataset=train_dataset,
         )
+
+        self.wiki_mode = wiki_mode
+        self.subwords_limit = subwords_limit
+
+        if self.wiki_mode:
+
+            self.distillation_dataset = DataLoader(
+                train_dataset,
+                collate_fn=Collator(tokenizer=tokenizer),
+                batch_size=kb.batch_size,
+            )
 
         self.alpha = alpha
 
@@ -208,6 +224,8 @@ class MlmTrainer(Trainer):
             do_distill_bert=do_distill_bert,
             do_distill_kg=do_distill_kg,
             max_tokens=max_tokens,
+            subwords_limit=subwords_limit,
+            wiki_mode=wiki_mode,
             device=self.args.device,
         )
 
@@ -264,10 +282,27 @@ class MlmTrainer(Trainer):
 
                     self.step_bert += 1
 
-                    distillation_loss = self.distillation.distill_bert(
-                        kb_model=self.kb_model,
-                        sample=sample,
-                    )
+                    if self.wiki_mode:
+
+                        distillation_loss = 0
+
+                        for sentences in self.distillation_dataset:
+                            break
+
+                        for mode in ["head-batch", "tail-batch"]:
+
+                            distillation_loss += self.distillation.distill_bert_wiki(
+                                kb_model=self.kb_model,
+                                entity_ids=sentences["entity_ids"],
+                                mode=mode,
+                            )
+
+                    else:
+
+                        distillation_loss = self.distillation.distill_bert(
+                            kb_model=self.kb_model,
+                            sample=sample,
+                        )
 
                     if distillation_loss != 0:
                         self.metric_kb_kl.update(distillation_loss.item())
