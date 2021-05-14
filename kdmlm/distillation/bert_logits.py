@@ -150,6 +150,9 @@ class BertLogits:
                     f"Updating Bert logits, {n_entity} distributions, {len(logits)} entities. {tot}"
                 )
 
+                if len(logits) >= self.n:
+                    break
+
         return logits
 
     def _top_k(self, model, input_ids, attention_mask, labels, entity_ids, **kwargs):
