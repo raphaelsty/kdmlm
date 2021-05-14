@@ -127,13 +127,12 @@ class BertLogits:
             dataset: kdmlm.KdDataset.
 
         """
-        n_entity = 0
-        tot = 0
+        n_distributions = 0
         logits = collections.defaultdict(list)
 
         bar = tqdm.tqdm(
             range(min(self.n // dataset.batch_size, len(dataset))),
-            desc=f"Updating Bert logits, {n_entity} distributions, {len(logits)} entities.",
+            desc=f"Updating Bert logits, {n_distributions} distributions, {len(logits)} entities.",
             position=0,
         )
 
@@ -143,14 +142,14 @@ class BertLogits:
                     for entity, l, index in self._top_k(model=model, **sample):
                         if entity in self.filter_entities:
                             logits[entity].append((l, index))
-                            n_entity += 1
+                            n_distributions += 1
                     bar.update(1)
 
                 bar.set_description(
-                    f"Updating Bert logits, {n_entity} distributions, {len(logits)} entities. {tot}"
+                    f"Updating Bert logits, {n_distributions} distributions, {len(logits)} entities."
                 )
 
-                if len(logits) >= self.n:
+                if n_distributions >= self.n:
                     break
 
         return logits

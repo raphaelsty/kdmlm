@@ -78,11 +78,11 @@ class KbLogits:
     def update(self, dataset, model):
         logits = collections.defaultdict(list)
 
-        n_entity = 0
+        n_distributions = 0
 
         bar = tqdm.tqdm(
             range(min(self.n // dataset.batch_size, len(dataset.train))),
-            desc=f"Updating kb logits, {n_entity} distributions, {len(logits)} entities.",
+            desc=f"Updating kb logits, {n_distributions} distributions, {len(logits)} entities.",
             position=0,
         )
 
@@ -109,7 +109,7 @@ class KbLogits:
 
                         logits[h].append((score, index))
 
-                        n_entity += 1
+                        n_distributions += 1
 
                     if t in self.filter_entities:
 
@@ -124,10 +124,10 @@ class KbLogits:
 
                         logits[t].append((score, index))
 
-                        n_entity += 1
+                        n_distributions += 1
 
                 bar.set_description(
-                    f"Updating kb logits, {n_entity} distributions, {len(logits)} entities."
+                    f"Updating kb logits, {n_distributions} distributions, {len(logits)} entities."
                 )
 
         return logits
