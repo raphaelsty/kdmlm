@@ -1,6 +1,8 @@
 import torch
 from torch.utils.data import Dataset
 
+from . import Collator
+
 ___all__ = ["KDDataset"]
 
 
@@ -84,6 +86,7 @@ class KDDataset(Dataset):
         self.tokenizer = tokenizer
         self.sep = sep
         self.n_masks = n_masks
+        self.collator = Collator(tokenizer=tokenizer)
 
     def __getitem__(self, idx):
         sentence, entity_id = self.dataset[idx]
@@ -325,3 +328,6 @@ class KDDataset(Dataset):
                     stop_label = True
 
         return {"mask": mask, "labels": labels, "input_ids": ids}
+
+    def collate_fn(self, data):
+        return self.collator(data)

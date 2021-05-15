@@ -1,9 +1,10 @@
 import os
 import random
 
+import torch
 import tqdm
 
-__all__ = ["LoadFromFolder", "LoadFromFile", "LoadFromStream"]
+__all__ = ["LoadFromFile", "LoadFromFolder", "LoadFromTorch", "LoadFromTorchFolder"]
 
 
 class LoadFromFile:
@@ -32,6 +33,31 @@ class LoadFromFile:
         """Load txt file."""
         file = open(path, "r", encoding="utf-8", errors="ignore")
         return file.readlines()
+
+
+class LoadFromTorch:
+    """Load data from torch file.
+
+    Arguments:
+    ----------
+        path (str): Path to the file storing inputs.
+
+    """
+
+    def __init__(self, path):
+        self.dataset = self.load(path=path)
+        self.len_file = self.dataset["input_ids"].shape[0]
+
+    def __getitem__(self, idx):
+        return {key: value[idx] for key, value in self.dataset.items()}
+
+    def __len__(self):
+        return self.len_file
+
+    @classmethod
+    def load(cls, path):
+        """Load torch file."""
+        return torch.load(path)
 
 
 class LoadFromFolder(LoadFromFile):
@@ -107,8 +133,8 @@ class LoadFromFolder(LoadFromFile):
 
             self.dataset = self.load(path=os.path.join(self.folder, self.list_files[self.id_file]))
 
+        i = 0
         while True:
-            i = 0
             try:
                 sentence = self.dataset[self.call + i].replace("\n", "")
                 entity_id = self.entities[sentence.split(self.sep)[1].strip()]
@@ -117,7 +143,7 @@ class LoadFromFolder(LoadFromFile):
                     return sentence, entity_id
             except:
                 # Need to switch of file:
-                if self.call + i >= len(self.dataset):
+                if self.call + i >= self.len_file:
                     self.call += i
                     return self.__getitem__(idx)
                 # Just an entity not correctly parsed:
@@ -129,19 +155,51 @@ class LoadFromFolder(LoadFromFile):
         return self.len_file * len(self.list_files)
 
 
-class LoadFromStream:
-    """Load data from Stream.
+class LoadFromTorchFolder(LoadFromTorch):
+    """Load torch serialized samples from folder."""
 
-    Arguments:
-    ----------
-        x (list): Input sentences.
+    def __init__(self, folder, shuffle=False, seed=42):
+        self.folder = folder
+        self.list_files = os.listdir(folder)
+        self.call = 0
+        self.id_file = 0
 
-    Example:
-    --------
-    """
+        if shuffle:
+            random.seed(42)
+            random.shuffle(self.list_files)
 
-    def __init__(self):
-        pass
+        super().__init__(path=os.path.join(self.folder, self.list_files[self.id_file]))
 
     def __getitem__(self, idx):
-        pass
+        if (self.call + 1) >= self.len_file:
+            # We iterate over a complete file.
+            self.call = 0
+            # If we have been trough all the file, i.e a complete epoch:
+            if (self.id_file + 1) == len(self.list_files):
+                self.id_file = 0
+            else:
+                self.id_file += 1
+            self.dataset = self.load(path=os.path.join(self.folder, self.list_files[self.id_file]))
+
+        self.call += 1
+        return super().__getitem__(idx=self.call)
+
+    def __len__(self):
+        return self.len_file * len(self.list_files)
+
+    @staticmethod
+    def collate_fn(data):
+        output = {
+            "input_ids": [],
+            "labels": [],
+            "mask": [],
+            "entity_ids": [],
+            "attention_mask": [],
+        }
+        for x in data:
+            for key, value in x.items():
+                output[key].append(value)
+
+        for key, value in output.items():
+            output[key] = torch.stack(value, dim=0)
+        return output

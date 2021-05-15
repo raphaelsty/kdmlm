@@ -10,7 +10,6 @@ from torch.utils import data
 from torch.utils.data import DataLoader
 from transformers import Trainer
 
-from ..datasets import Collator, KDDataset, LoadFromFolder
 from ..distillation import Distillation
 
 __all__ = ["MlmTrainer"]
@@ -76,11 +75,6 @@ class MlmTrainer(Trainer):
     ...     sep='|'
     ... )
 
-    >>> len(train_dataset)
-    100
-
-    >>> data_collator = datasets.Collator(tokenizer=tokenizer)
-
     >>> training_args = TrainingArguments(
     ...     output_dir = f'./checkpoints',
     ...     overwrite_output_dir = True,
@@ -94,7 +88,7 @@ class MlmTrainer(Trainer):
 
     >>> mlm_trainer = MlmTrainer(
     ...    args = training_args,
-    ...    data_collator = data_collator,
+    ...    data_collator = train_dataset.collate_fn,
     ...    model = model,
     ...    train_dataset = train_dataset,
     ...    tokenizer = tokenizer,
@@ -104,7 +98,7 @@ class MlmTrainer(Trainer):
     ...    eval_kb_every = 30,
     ...    negative_sampling_size = 10,
     ...    fit_kb_n_times = 2,
-    ...    n = 1000,
+    ...    n = 10,
     ...    top_k_size = 100,
     ...    update_top_k_every = 20,
     ...    alpha = 0.3,
@@ -153,7 +147,7 @@ class MlmTrainer(Trainer):
         super().__init__(
             model=model,
             args=args,
-            data_collator=data_collator,
+            data_collator=train_dataset.collate_fn,
             train_dataset=train_dataset,
         )
 
@@ -162,9 +156,9 @@ class MlmTrainer(Trainer):
 
         if self.wiki_mode:
 
-            self.distillation_dataset = DataLoader(
+            self.distill_wiki = DataLoader(
                 train_dataset,
-                collate_fn=Collator(tokenizer=tokenizer),
+                collate_fn=train_dataset.collate_fn,
                 batch_size=kb.batch_size,
             )
 
@@ -206,9 +200,9 @@ class MlmTrainer(Trainer):
         self.step_kb = 0
         self.step_bert = 0
 
-        self.dataset_distillation = data.DataLoader(
+        self.dataset_logits = data.DataLoader(
             dataset=train_dataset,
-            collate_fn=self.data_collator,
+            collate_fn=train_dataset.collate_fn,
             batch_size=100,
         )
 
@@ -216,7 +210,7 @@ class MlmTrainer(Trainer):
             bert_model=model,
             kb_model=kb_model,
             kb=kb,
-            dataset=self.dataset_distillation,
+            dataset=self.dataset_logits,
             tokenizer=tokenizer,
             entities=kb.entities,
             k=top_k_size,
@@ -276,7 +270,7 @@ class MlmTrainer(Trainer):
 
                         self.distillation.update_bert(
                             model=model,
-                            dataset=self.dataset_distillation,
+                            dataset=self.dataset_logits,
                             tokenizer=self.tokenizer,
                         )
 
@@ -286,7 +280,7 @@ class MlmTrainer(Trainer):
 
                         distillation_loss = 0
 
-                        for sentences in self.distillation_dataset:
+                        for sentences in self.distill_wiki:
                             break
 
                         for mode in ["head-batch", "tail-batch"]:
