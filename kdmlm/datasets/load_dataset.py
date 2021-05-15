@@ -196,7 +196,15 @@ class LoadFromTorchFolder(LoadFromTorch):
             "entity_ids": [],
             "attention_mask": [],
         }
+
+        # When multiples files met, dimension may be different.
+        default_len = len(data[0]["input_ids"])
+
         for x in data:
+
+            if len(x["input_ids"]) != default_len:
+                continue
+
             for key, value in x.items():
                 output[key].append(value)
 
