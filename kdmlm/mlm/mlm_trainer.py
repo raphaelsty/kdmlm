@@ -109,6 +109,7 @@ class MlmTrainer(Trainer):
     ...    do_distill_bert = True,
     ...    wiki_mode=True,
     ...    path_score_kb = 'evaluation.csv',
+    ...    norm_loss = True,
     ... )
 
     >>> mlm_trainer.train()
@@ -142,7 +143,9 @@ class MlmTrainer(Trainer):
         path_score_kb=None,
         path_model_kb=None,
         lr_kb=0.00005,
-        wiki_mode=True,
+        wiki_mode=False,
+        norm_loss=False,
+        ewm_alpha=0.9997,
     ):
         super().__init__(
             model=model,
@@ -153,6 +156,16 @@ class MlmTrainer(Trainer):
 
         self.wiki_mode = wiki_mode
         self.subwords_limit = subwords_limit
+        self.norm_loss = norm_loss
+
+        if norm_loss:
+
+            self.ewm = {
+                "link_prediction": stats.EWMean(alpha=ewm_alpha),
+                "mlm": stats.EWMean(alpha=ewm_alpha),
+                "distill_link_prediction": stats.EWMean(alpha=ewm_alpha),
+                "distill_mlm": stats.EWMean(alpha=ewm_alpha),
+            }
 
         if self.wiki_mode:
 
@@ -299,9 +312,24 @@ class MlmTrainer(Trainer):
                         )
 
                     if distillation_loss != 0:
+
                         self.metric_kb_kl.update(distillation_loss.item())
 
-                loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
+                if self.distillation.do_distill_bert and self.fit_kb:
+
+                    if self.norm_loss:
+
+                        loss = self.normalize_loss(
+                            loss=loss, distillation_loss=distillation_loss, bert=False
+                        )
+
+                    else:
+
+                        loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
+
+                elif self.distillation.do_distill_bert and not self.fit_kb:
+
+                    loss = distillation_loss
 
                 if loss != 0:
 
@@ -357,14 +385,31 @@ class MlmTrainer(Trainer):
                 )
 
                 if distillation_loss != 0:
+
                     self.metric_bert_kl.update(distillation_loss.item())
 
                 model = model.eval()
 
-            loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
+            if self.distillation.do_distill_kg and self.fit_bert:
+
+                if self.norm_loss:
+
+                    loss = self.normalize_loss(
+                        loss=loss, distillation_loss=distillation_loss, bert=True
+                    )
+
+                else:
+
+                    loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
+
+            elif self.distillation.do_distill_kg and not self.fit_bert:
+
+                loss = distillation_loss
 
             if loss != 0:
+
                 loss.backward()
+
                 loss = loss.detach()
 
         return loss
@@ -432,3 +477,30 @@ class MlmTrainer(Trainer):
         score["kb_loss"] = self.metric_kb.get()
         self.scores.append(pd.DataFrame.from_dict(score, orient="index").T)
         pd.concat(self.scores, axis="rows").to_csv(self.path_score_kb, index=False)
+
+    def normalize_loss(self, loss, distillation_loss, bert):
+        """Normalize losses."""
+
+        if distillation_loss == 0:
+            return loss
+
+        if bert:
+            self.ewm["mlm"].update(loss.detach().item())
+            self.ewm["distill_mlm"].update(distillation_loss.detach().item())
+        else:
+            self.ewm["link_prediction"].update(loss.detach().item())
+            self.ewm["distill_link_prediction"].update(distillation_loss.detach().item())
+
+        weight = 1 / (1 + self.alpha)
+
+        try:
+            if bert:
+                scale = self.ewm["mlm"].get() / self.ewm["distill_mlm"].get()
+            else:
+                scale = (
+                    self.ewm["link_prediction"].get() / self.ewm["distill_link_prediction"].get()
+                )
+        except ZeroDivisionError:
+            return loss
+
+        return weight * (loss + self.alpha * scale * distillation_loss)
