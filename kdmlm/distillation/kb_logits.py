@@ -72,6 +72,7 @@ class KbLogits:
         self.filter_entities = {e.item(): True for e in kb_entities}
 
         self.heads, self.tails = get_tensor_distillation(kb_entities)
+        self.heads, self.tails = self.heads.to(self.device), self.tails.to(self.device)
 
         self.logits = self.update(dataset=dataset, model=model)
 
