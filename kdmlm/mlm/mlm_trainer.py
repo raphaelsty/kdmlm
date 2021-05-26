@@ -15,6 +15,13 @@ from ..distillation import Distillation
 __all__ = ["MlmTrainer"]
 
 
+class EndTrainingException(Exception):
+    """Stop training."""
+
+    print("Done training.")
+    pass
+
+
 class MlmTrainer(Trainer):
     """Custom trainer to distill knowledge to bert from knowledge graphs embeddings.
 
@@ -57,7 +64,7 @@ class MlmTrainer(Trainer):
     >>> kb_model = mkb_models.TransE(
     ...     entities = kb.entities,
     ...     relations = kb.relations,
-    ...     hidden_dim = 2,
+    ...     hidden_dim = 1,
     ...     gamma = 8
     ... )
 
@@ -98,18 +105,18 @@ class MlmTrainer(Trainer):
     ...    eval_kb_every = 30,
     ...    negative_sampling_size = 10,
     ...    fit_kb_n_times = 2,
-    ...    n = 10,
+    ...    n = 10000,
     ...    top_k_size = 100,
     ...    update_top_k_every = 20,
     ...    alpha = 0.3,
     ...    seed = 42,
-    ...    fit_bert = True,
-    ...    fit_kb = True,
+    ...    fit_bert = False,
+    ...    fit_kb = False,
     ...    do_distill_kg = True,
-    ...    do_distill_bert = True,
-    ...    wiki_mode=True,
+    ...    do_distill_bert = False,
+    ...    wiki_mode=False,
     ...    path_score_kb = 'evaluation.csv',
-    ...    norm_loss = True,
+    ...    norm_loss = False,
     ... )
 
     >>> mlm_trainer.train()
@@ -133,8 +140,8 @@ class MlmTrainer(Trainer):
         top_k_size=100,
         update_top_k_every=1000,
         fit_kb_n_times=1,
-        max_tokens=15,
-        subwords_limit=15,  # Maximum number of sub words to consider an entity.
+        max_tokens=1,
+        subwords_limit=1000,  # Maximum number of sub words to consider an entity.
         fit_bert=True,
         fit_kb=True,
         do_distill_bert=True,
@@ -146,6 +153,7 @@ class MlmTrainer(Trainer):
         wiki_mode=False,
         norm_loss=False,
         ewm_alpha=0.9997,
+        max_step_bert=None,
     ):
         super().__init__(
             model=model,
@@ -157,8 +165,10 @@ class MlmTrainer(Trainer):
         self.wiki_mode = wiki_mode
         self.subwords_limit = subwords_limit
         self.norm_loss = norm_loss
+        self.max_step_bert = max_step_bert
+        self.call = 0
 
-        if norm_loss:
+        if self.norm_loss:
 
             self.ewm = {
                 "link_prediction": stats.EWMean(alpha=ewm_alpha),
@@ -347,6 +357,10 @@ class MlmTrainer(Trainer):
 
     def training_step(self, model, inputs):
         """Training step."""
+        if self.max_step_bert is not None:
+            self.call += 1
+            if self.call > self.max_step_bert:
+                raise EndTrainingException
 
         self.training_step_kb(model=model)
         loss = 0
