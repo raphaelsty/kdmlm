@@ -48,6 +48,7 @@ class KbLogits:
     ...     entities = dataset.entities,
     ...     tokenizer = tokenizer,
     ...     subwords_limit = 1,
+    ...     triples_mode = False,
     ...     k = 1,
     ...     n = 1000,
     ...     device = 'cpu'
@@ -56,9 +57,31 @@ class KbLogits:
     >>> len(kb_logits.logits.keys())
     122
 
+    >>> kb_logits = distillation.KbLogits(
+    ...     dataset = dataset,
+    ...     model = model,
+    ...     entities = dataset.entities,
+    ...     tokenizer = tokenizer,
+    ...     subwords_limit = 1,
+    ...     triples_mode = True,
+    ...     k = 2,
+    ...     n = 100,
+    ...     device = 'cpu'
+    ... )
+
+    >>> logits, candidates = kb_logits.logits["head-batch"][(474, 58, 9541)]
+
+    >>> candidates
+    tensor([12708,  5448,  3585,  6005])
+
+    >>> logits
+    tensor([ 2.7037,  2.3936, -0.6049, -1.2984])
+
     """
 
-    def __init__(self, dataset, model, entities, tokenizer, subwords_limit, k, n, device):
+    def __init__(
+        self, dataset, model, entities, tokenizer, subwords_limit, triples_mode, k, n, device
+    ):
         self.k = k
         self.n = n
         self.device = device
@@ -74,10 +97,18 @@ class KbLogits:
         self.heads, self.tails = get_tensor_distillation(kb_entities)
         self.heads, self.tails = self.heads.to(self.device), self.tails.to(self.device)
 
+        self.triples_mode = triples_mode
         self.logits = self.update(dataset=dataset, model=model)
 
     def update(self, dataset, model):
-        logits = collections.defaultdict(list)
+
+        if self.triples_mode:
+            logits = {
+                "head-batch": {},
+                "tail-batch": {},
+            }
+        else:
+            logits = collections.defaultdict(list)
 
         n_distributions = 0
 
@@ -108,7 +139,10 @@ class KbLogits:
                             mode="head-batch",
                         )
 
-                        logits[h].append((score, index))
+                        if self.triples_mode:
+                            logits["head-batch"][(h, r, t)] = (score, index)
+                        else:
+                            logits[h].append((score, index))
 
                         n_distributions += 1
 
@@ -123,7 +157,10 @@ class KbLogits:
                             mode="tail-batch",
                         )
 
-                        logits[t].append((score, index))
+                        if self.triples_mode:
+                            logits["tail-batch"][(h, r, t)] = (score, index)
+                        else:
+                            logits[t].append((score, index))
 
                         n_distributions += 1
 
@@ -171,6 +208,7 @@ class KbLogits:
         ...     entities = dataset.entities,
         ...     tokenizer = tokenizer,
         ...     subwords_limit = 2,
+        ...     triples_mode = False,
         ...     k = 2,
         ...     n = 10,
         ...     device = 'cpu'

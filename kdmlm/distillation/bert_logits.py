@@ -50,6 +50,7 @@ class BertLogits:
     ...     dataset = dataset,
     ...     tokenizer = tokenizer,
     ...     entities = kb.entities,
+    ...     triples_mode = False,
     ...     k = 4,
     ...     n = 1000,
     ...     device = "cpu",
@@ -84,6 +85,42 @@ class BertLogits:
     Queen Mary, University of London
     Emile Hirsch
 
+    >>> dataset = data.DataLoader(
+    ...    dataset = datasets.TriplesTorchSample(),
+    ...     collate_fn = datasets.Collator(tokenizer=tokenizer),
+    ...     batch_size = 6,
+    ... )
+
+    >>> from kdmlm import distillation
+
+    >>> distillation = distillation.BertLogits(
+    ...     model = model,
+    ...     dataset = dataset,
+    ...     tokenizer = tokenizer,
+    ...     entities = kb.entities,
+    ...     triples_mode = True,
+    ...     k = 4,
+    ...     n = 100,
+    ...     device = "cpu",
+    ...     max_tokens = 15,
+    ...     subwords_limit = 10,
+    ... )
+
+    >>> logits, candidates = distillation.logits["head-batch"][(531, 106, 357)]
+
+    >>> for c in candidates[:4]:
+    ...     print(e[c.item()])
+    Manhattan
+    Brooklyn
+    Queens
+    Harlem
+
+    >>> e[531]
+    'Manhattan'
+
+    >>> e[357]
+    'New York City'
+
     """
 
     def __init__(
@@ -92,6 +129,7 @@ class BertLogits:
         tokenizer,
         dataset,
         entities,
+        triples_mode,
         max_tokens,
         subwords_limit,
         k,
@@ -114,9 +152,11 @@ class BertLogits:
 
         self.order = self.order.to(self.device)
 
-        self.logits = self.update(model=model, tokenizer=tokenizer, dataset=dataset)
+        self.triples_mode = triples_mode
 
-    def update(self, model, tokenizer, dataset):
+        self.logits = self.update(model=model, dataset=dataset)
+
+    def update(self, model, dataset):
         """Compute n * batch_size distributions and store them into a dictionnary which have
         entities ids as key.
 
@@ -128,7 +168,14 @@ class BertLogits:
 
         """
         n_distributions = 0
-        logits = collections.defaultdict(list)
+
+        if self.triples_mode:
+            logits = {
+                "head-batch": {},
+                "tail-batch": {},
+            }
+        else:
+            logits = collections.defaultdict(list)
 
         bar = tqdm.tqdm(
             range(min(self.n // dataset.batch_size, len(dataset))),
@@ -138,11 +185,23 @@ class BertLogits:
 
         with bar:
             for sample in dataset:
+
+                if "mode" not in sample:
+                    sample["mode"] = None
+                    sample["triple"] = None
+
                 with torch.no_grad():
-                    for entity, l, index in self._top_k(model=model, **sample):
+                    for (entity, l, index, h, r, t, mode) in self._top_k(model=model, **sample):
+
                         if entity in self.filter_entities:
-                            logits[entity].append((l, index))
+
+                            if self.triples_mode:
+                                logits[mode][(h, r, t)] = (l, index)
+
+                            else:
+                                logits[entity].append((l, index))
                             n_distributions += 1
+
                     bar.update(1)
 
                 bar.set_description(
@@ -154,7 +213,7 @@ class BertLogits:
 
         return logits
 
-    def _top_k(self, model, input_ids, attention_mask, labels, entity_ids, **kwargs):
+    def _top_k(self, model, input_ids, attention_mask, labels, entity_ids, mode, triple, **kwargs):
         """Yield probabilities distribution for a given sample.
 
         Parameters
@@ -189,8 +248,14 @@ class BertLogits:
 
         for i, entity in enumerate(entity_ids):
 
+            if mode is not None:
+                h, r, t = triple[i]
+                m = mode[i]
+            else:
+                h, r, t, m = None, None, None, None
+
             random_k_logits = torch.index_select(logits[i], 0, random_k[i])
 
             yield entity.item(), torch.cat([top_k_logits[i], random_k_logits]), torch.cat(
                 [top_k[i], random_k[i]]
-            )
+            ), h, r, t, m

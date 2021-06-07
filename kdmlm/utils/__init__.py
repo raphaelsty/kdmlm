@@ -9,6 +9,7 @@ from .distillation import (
 from .filter import filter_entities
 from .perplexity import perplexity
 from .wiki_process import WikiProcess
+from .wiki_triples import WikiTriples
 
 __all__ = [
     "bert_top_k",
@@ -20,4 +21,5 @@ __all__ = [
     "mapping_entities",
     "perplexity",
     "WikiProcess",
+    "WikiTriples",
 ]

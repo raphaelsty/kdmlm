@@ -1,6 +1,5 @@
 import torch
 from transformers import DataCollatorForLanguageModeling
-from transformers.tokenization_utils_base import BatchEncoding
 
 __all__ = ["Collator"]
 
@@ -32,6 +31,12 @@ class Collator(DataCollatorForLanguageModeling):
             "entity_ids": torch.stack([x["entity_ids"] for x in examples]),
         }
 
+        if "mode" in examples[0]:
+            batch["mode"] = [x["mode"] for x in examples]
+
+        if "triple" in examples[0]:
+            batch["triple"] = [x["triple"] for x in examples]
+
         batch["input_ids"], batch["labels"] = self.replace_tokens(
             inputs=batch["input_ids"],
             mask=batch["mask"],
@@ -47,9 +52,7 @@ class Collator(DataCollatorForLanguageModeling):
 
         # indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & mask
         indices_replaced = torch.bernoulli(torch.full(labels.shape, 1.0)).bool() & mask
-        inputs[indices_replaced] = self.tokenizer.convert_tokens_to_ids(
-            self.tokenizer.mask_token
-        )
+        inputs[indices_replaced] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
 
         # Originaly:
         # 10% of the time, we replace masked input tokens with random word

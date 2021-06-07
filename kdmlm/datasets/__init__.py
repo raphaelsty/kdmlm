@@ -3,6 +3,7 @@ from .kd_dataset import KDDataset
 from .load_dataset import LoadFromFile, LoadFromFolder, LoadFromTorch, LoadFromTorchFolder
 from .sample import Sample
 from .torch_sample import TorchSample
+from .triples_torch_sample import TriplesTorchSample
 
 __all__ = [
     "Collator",
@@ -13,4 +14,5 @@ __all__ = [
     "LoadFromTorchFolder",
     "Sample",
     "TorchSample",
+    "TriplesTorchSample",
 ]

@@ -195,6 +195,8 @@ class LoadFromTorchFolder(LoadFromTorch):
             "mask": [],
             "entity_ids": [],
             "attention_mask": [],
+            "mode": [],
+            "triple": [],
         }
 
         # When multiples files met, dimension may be different.
@@ -209,5 +211,5 @@ class LoadFromTorchFolder(LoadFromTorch):
                 output[key].append(value)
 
         for key, value in output.items():
-            output[key] = torch.stack(value, dim=0)
+            output[key] = torch.stack(value, dim=0) if key not in ["mode", "triple"] else value
         return output

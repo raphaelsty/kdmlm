@@ -76,11 +76,13 @@ class MlmTrainer(Trainer):
     ...     device = device,
     ... )
 
-    >>> train_dataset = datasets.KDDataset(
-    ...     dataset=datasets.Sample(),
-    ...     tokenizer=tokenizer,
-    ...     sep='|'
-    ... )
+    #>>> train_dataset = datasets.KDDataset(
+    #...     dataset=datasets.Sample(),
+    #...     tokenizer=tokenizer,
+    #...     sep='|'
+    #... )
+
+    >>> train_dataset = datasets.TriplesTorchSample()
 
     >>> training_args = TrainingArguments(
     ...     output_dir = f'./checkpoints',
@@ -117,6 +119,7 @@ class MlmTrainer(Trainer):
     ...    wiki_mode=False,
     ...    path_score_kb = 'evaluation.csv',
     ...    norm_loss = False,
+    ...    max_step_bert = 2,
     ... )
 
     >>> mlm_trainer.train()
@@ -154,6 +157,7 @@ class MlmTrainer(Trainer):
         norm_loss=False,
         ewm_alpha=0.9997,
         max_step_bert=None,
+        triples_mode=False,
     ):
         super().__init__(
             model=model,
@@ -238,6 +242,7 @@ class MlmTrainer(Trainer):
             entities=kb.entities,
             k=top_k_size,
             n=n,
+            triples_mode=triples_mode,
             do_distill_bert=do_distill_bert,
             do_distill_kg=do_distill_kg,
             max_tokens=max_tokens,

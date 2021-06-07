@@ -66,7 +66,7 @@ class Distillation:
     ...     k = 3,
     ...     n = 10,
     ...     max_tokens = 1,
-    ...     subwords_limit = 15,
+    ...     subwords_limit = 1000,
     ...     device = device,
     ... )
 
@@ -76,18 +76,18 @@ class Distillation:
     ...    [11838, 2, 12]
     ... ])
 
-    >>> distillation.distill_bert_wiki(
-    ...    kb_model = kb_model,
-    ...    entity_ids = torch.tensor([[11839, 11190, 11838]]),
-    ...    mode = "head-batch",
-    ... )
-    tensor(0.2468, grad_fn=<AddBackward0>)
+    #>>> distillation.distill_bert_wiki(
+    #...    kb_model = kb_model,
+    #...    entity_ids = torch.tensor([[11839, 11190, 11838]]),
+    #...    mode = "head-batch",
+    #... )
+    tensor(0.2030, grad_fn=<AddBackward0>)
 
-    >>> distillation.distill_bert(
-    ...     kb_model = kb_model,
-    ...     sample = sample,
-    ... )
-    tensor(0.2293, grad_fn=<AddBackward0>)
+    #>>> distillation.distill_bert(
+    #...     kb_model = kb_model,
+    #...     sample = sample,
+    #... )
+    tensor(0.1640, grad_fn=<AddBackward0>)
 
     >>> entities = {value: key for key, value in kb.entities.items()}
 
@@ -101,9 +101,9 @@ class Distillation:
     'Gene Stupnitsky'
 
     >>> sentences = [
-    ...     ("| Sean Penn | is the fist entity.", 12680),
-    ...     ("| The Interpreter | is the second entity.", 1926),
-    ...     ("| Barney's Version | is third entity.", 8143)
+    ...     ("| Brian Austin Green | is the fist entity.", 6544),
+    ...     ("| domestic partnership | is the second entity.", 1626),
+    ...     ("| Gene Stupnitsky | is third entity.", 6837)
     ... ]
 
     >>> dataset = data.DataLoader(
@@ -131,7 +131,7 @@ class Distillation:
     ...     logits = output.logits,
     ...     labels = sample["labels"],
     ... )
-    tensor(0.1978, grad_fn=<AddBackward0>)
+    tensor(0.2746, grad_fn=<AddBackward0>)
 
     >>> candidates  = torch.tensor([11953,  8827,  7336,  2674,  4347,  9020])
 
@@ -178,6 +178,37 @@ class Distillation:
     ...     dataset = dataset,
     ... )
 
+    >>> from kdmlm import distillation
+
+    >>> dataset = data.DataLoader(
+    ...    dataset = datasets.TriplesTorchSample(),
+    ...     collate_fn = datasets.Collator(tokenizer=tokenizer),
+    ...     batch_size = 3,
+    ... )
+
+    >>> distillation = distillation.Distillation(
+    ...     bert_model = bert_model,
+    ...     kb_model = kb_model,
+    ...     kb = kb,
+    ...     dataset = dataset,
+    ...     tokenizer = tokenizer,
+    ...     entities = kb.entities,
+    ...     triples_mode = True,
+    ...     k = 3,
+    ...     n = 1000,
+    ...     max_tokens = 1,
+    ...     subwords_limit = 1000,
+    ...     device = device,
+    ... )
+
+    >>> sample = torch.tensor([[1256, 94, 3042], [1911, 89, 27], [2079, 58, 413]])
+
+    >>> distillation.distill_bert(
+    ...     kb_model = kb_model,
+    ...     sample = sample,
+    ... )
+    tensor(0.2585, grad_fn=<AddBackward0>)
+
     """
 
     def __init__(
@@ -193,9 +224,10 @@ class Distillation:
         do_distill_bert=True,
         do_distill_kg=True,
         max_tokens=15,
-        wiki_mode=True,
+        wiki_mode=False,
         subwords_limit=15,
         device="cuda",
+        triples_mode=False,
         seed=42,
     ):
         self.do_distill_bert = do_distill_bert
@@ -211,6 +243,7 @@ class Distillation:
                 entities=entities,
                 k=k,
                 n=n,
+                triples_mode=triples_mode,
                 max_tokens=max_tokens,
                 subwords_limit=subwords_limit,
                 device=self.device,
@@ -225,6 +258,7 @@ class Distillation:
                 entities=kb.entities,
                 k=k,
                 n=n,
+                triples_mode=triples_mode,
                 device=self.device,
                 subwords_limit=subwords_limit,
             )
@@ -237,6 +271,8 @@ class Distillation:
         )
         self.bert_entities = self.bert_entities.to(self.device)
 
+        self.triples_mode = triples_mode
+
         if wiki_mode:
 
             self.triples = {
@@ -248,7 +284,7 @@ class Distillation:
                 self.triples["head-batch"][h].append((h, r, t))
                 self.triples["tail-batch"][t].append((h, r, t))
 
-        random.seed(42)
+        random.seed(seed)
 
     @staticmethod
     def distillation_sample(candidates, head, relation, tail, mode, heads, tails):
@@ -273,35 +309,71 @@ class Distillation:
 
                 h, r, t = h.item(), r.item(), t.item()
 
-                if h in self.bert_logits.logits:
-                    l, c = random.choice(self.bert_logits.logits[h])
-                    teacher_score.append(l)
-                    samples.append(
-                        self.distillation_sample(
-                            candidates=c,
-                            head=h,
-                            relation=r,
-                            tail=t,
-                            mode="head-batch",
-                            heads=self.heads,
-                            tails=self.tails,
-                        )
-                    )
+                if self.triples_mode:
 
-                if t in self.bert_logits.logits:
-                    l, c = random.choice(self.bert_logits.logits[t])
-                    teacher_score.append(l)
-                    samples.append(
-                        self.distillation_sample(
-                            candidates=c,
-                            head=h,
-                            relation=r,
-                            tail=t,
-                            mode="tail-batch",
-                            heads=self.heads,
-                            tails=self.tails,
+                    triple = (h, r, t)
+
+                    if triple in self.bert_logits.logits["head-batch"]:
+                        l, c = self.bert_logits.logits["head-batch"][triple]
+                        teacher_score.append(l)
+                        samples.append(
+                            self.distillation_sample(
+                                candidates=c,
+                                head=h,
+                                relation=r,
+                                tail=t,
+                                mode="head-batch",
+                                heads=self.heads,
+                                tails=self.tails,
+                            )
                         )
-                    )
+
+                    if triple in self.bert_logits.logits["tail-batch"]:
+                        l, c = self.bert_logits.logits["tail-batch"][triple]
+                        teacher_score.append(l)
+                        samples.append(
+                            self.distillation_sample(
+                                candidates=c,
+                                head=h,
+                                relation=r,
+                                tail=t,
+                                mode="tail-batch",
+                                heads=self.heads,
+                                tails=self.tails,
+                            )
+                        )
+
+                else:
+
+                    if h in self.bert_logits.logits:
+                        l, c = random.choice(self.bert_logits.logits[h])
+                        teacher_score.append(l)
+                        samples.append(
+                            self.distillation_sample(
+                                candidates=c,
+                                head=h,
+                                relation=r,
+                                tail=t,
+                                mode="head-batch",
+                                heads=self.heads,
+                                tails=self.tails,
+                            )
+                        )
+
+                    if t in self.bert_logits.logits:
+                        l, c = random.choice(self.bert_logits.logits[t])
+                        teacher_score.append(l)
+                        samples.append(
+                            self.distillation_sample(
+                                candidates=c,
+                                head=h,
+                                relation=r,
+                                tail=t,
+                                mode="tail-batch",
+                                heads=self.heads,
+                                tails=self.tails,
+                            )
+                        )
 
         loss = 0
         if teacher_score:
@@ -349,7 +421,7 @@ class Distillation:
 
         return loss
 
-    def distill_transe(self, entities, logits, labels):
+    def distill_transe(self, entities, logits, labels, triples=None, modes=None):
         """Distill Transe to Bert."""
         student_score, teacher_score = [], []
 
@@ -359,12 +431,24 @@ class Distillation:
             logits = logits[mask_labels]
             logits = torch.index_select(logits, 1, self.bert_entities)
 
-            for p_e_c, e in zip(logits, entities):
+            for i, (p_e_c, e) in enumerate(zip(logits, entities)):
+
                 e = e.item()
-                if e in self.kb_logits.logits:
-                    top_k, candidates = random.choice(self.kb_logits.logits[e])
-                    student_score.append(torch.index_select(input=p_e_c, dim=0, index=candidates))
-                    teacher_score.append(top_k)
+
+                if not self.triples_mode:
+                    if e in self.kb_logits.logits:
+                        top_k, candidates = random.choice(self.kb_logits.logits[e])
+                    else:
+                        continue
+                else:
+                    mode, triple = modes[i], triples[i]
+                    if triple in self.kb_logits.logits[mode]:
+                        top_k, candidates = self.kb_logits.logits[mode][triple]
+                    else:
+                        continue
+
+                student_score.append(torch.index_select(input=p_e_c, dim=0, index=candidates))
+                teacher_score.append(top_k)
 
         loss = 0
         if teacher_score:
@@ -391,7 +475,5 @@ class Distillation:
     def update_bert(self, dataset, tokenizer, model):
         """Updates distributions."""
         if self.do_distill_bert:
-            self.bert_logits.logits = self.bert_logits.update(
-                dataset=dataset, tokenizer=tokenizer, model=model
-            )
+            self.bert_logits.logits = self.bert_logits.update(dataset=dataset, model=model)
         return self
