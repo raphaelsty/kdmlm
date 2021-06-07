@@ -377,6 +377,17 @@ class MlmTrainer(Trainer):
 
             inputs.pop("mask")
             entity_ids = inputs.pop("entity_ids")
+
+            if "mode" in inputs:
+                mode = inputs.pop("mode")
+            else:
+                mode = None
+
+            if "triple" in inputs:
+                triple = inputs.pop("triple")
+            else:
+                triple = None
+
             labels = inputs["labels"]
             inputs = self._prepare_inputs(inputs)
 
@@ -401,6 +412,8 @@ class MlmTrainer(Trainer):
                     entities=entity_ids,
                     logits=outputs.logits,
                     labels=labels,
+                    modes=mode,
+                    triples=triple,
                 )
 
                 if distillation_loss != 0:
