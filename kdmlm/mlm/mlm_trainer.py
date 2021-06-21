@@ -76,13 +76,12 @@ class MlmTrainer(Trainer):
     ...     device = device,
     ... )
 
-    #>>> train_dataset = datasets.KDDataset(
-    #...     dataset=datasets.Sample(),
-    #...     tokenizer=tokenizer,
-    #...     sep='|'
-    #... )
-
-    >>> train_dataset = datasets.TriplesTorchSample()
+    >>> train_dataset = datasets.KDDataset(
+    ...     dataset=datasets.Sample(),
+    ...     tokenizer=tokenizer,
+    ...     sep='|',
+    ...     mlm_probability = 1,
+    ... )
 
     >>> training_args = TrainingArguments(
     ...     output_dir = f'./checkpoints',
@@ -97,7 +96,6 @@ class MlmTrainer(Trainer):
 
     >>> mlm_trainer = MlmTrainer(
     ...    args = training_args,
-    ...    data_collator = train_dataset.collate_fn,
     ...    model = model,
     ...    train_dataset = train_dataset,
     ...    tokenizer = tokenizer,
@@ -112,14 +110,13 @@ class MlmTrainer(Trainer):
     ...    update_top_k_every = 20,
     ...    alpha = 0.3,
     ...    seed = 42,
-    ...    fit_bert = False,
-    ...    fit_kb = False,
+    ...    fit_bert = True,
+    ...    fit_kb = True,
     ...    do_distill_kg = True,
-    ...    do_distill_bert = False,
-    ...    wiki_mode=False,
+    ...    do_distill_bert = True,
     ...    path_score_kb = 'evaluation.csv',
     ...    norm_loss = False,
-    ...    max_step_bert = 2,
+    ...    max_step_bert = 10,
     ... )
 
     >>> mlm_trainer.train()
@@ -130,7 +127,6 @@ class MlmTrainer(Trainer):
         self,
         model,
         args,
-        data_collator,
         train_dataset,
         tokenizer,
         kb,
@@ -153,11 +149,9 @@ class MlmTrainer(Trainer):
         path_score_kb=None,
         path_model_kb=None,
         lr_kb=0.00005,
-        wiki_mode=False,
         norm_loss=False,
         ewm_alpha=0.9997,
         max_step_bert=None,
-        triples_mode=False,
     ):
         super().__init__(
             model=model,
@@ -166,7 +160,6 @@ class MlmTrainer(Trainer):
             train_dataset=train_dataset,
         )
 
-        self.wiki_mode = wiki_mode
         self.subwords_limit = subwords_limit
         self.norm_loss = norm_loss
         self.max_step_bert = max_step_bert
@@ -180,14 +173,6 @@ class MlmTrainer(Trainer):
                 "distill_link_prediction": stats.EWMean(alpha=ewm_alpha),
                 "distill_mlm": stats.EWMean(alpha=ewm_alpha),
             }
-
-        if self.wiki_mode:
-
-            self.distill_wiki = DataLoader(
-                train_dataset,
-                collate_fn=train_dataset.collate_fn,
-                batch_size=kb.batch_size,
-            )
 
         self.alpha = alpha
 
@@ -242,12 +227,10 @@ class MlmTrainer(Trainer):
             entities=kb.entities,
             k=top_k_size,
             n=n,
-            triples_mode=triples_mode,
             do_distill_bert=do_distill_bert,
             do_distill_kg=do_distill_kg,
             max_tokens=max_tokens,
             subwords_limit=subwords_limit,
-            wiki_mode=wiki_mode,
             device=self.args.device,
         )
 
@@ -283,6 +266,7 @@ class MlmTrainer(Trainer):
                 distillation_loss = 0
 
                 data = next(self.kb)
+
                 sample, weight, mode = data["sample"], data["weight"], data["mode"]
 
                 if self.fit_kb:
@@ -304,27 +288,10 @@ class MlmTrainer(Trainer):
 
                     self.step_bert += 1
 
-                    if self.wiki_mode:
-
-                        distillation_loss = 0
-
-                        for sentences in self.distill_wiki:
-                            break
-
-                        for mode in ["head-batch", "tail-batch"]:
-
-                            distillation_loss += self.distillation.distill_bert_wiki(
-                                kb_model=self.kb_model,
-                                entity_ids=sentences["entity_ids"],
-                                mode=mode,
-                            )
-
-                    else:
-
-                        distillation_loss = self.distillation.distill_bert(
-                            kb_model=self.kb_model,
-                            sample=sample,
-                        )
+                    distillation_loss = self.distillation.distill_bert(
+                        kb_model=self.kb_model,
+                        sample=sample,
+                    )
 
                     if distillation_loss != 0:
 
@@ -367,26 +334,21 @@ class MlmTrainer(Trainer):
             if self.call > self.max_step_bert:
                 raise EndTrainingException
 
-        self.training_step_kb(model=model)
         loss = 0
         distillation_loss = 0
 
         if self.fit_bert or self.distillation.do_distill_kg:
 
-            model.train()
-
+            model = model.train()
             inputs.pop("mask")
-            entity_ids = inputs.pop("entity_ids")
 
-            if "mode" in inputs:
-                mode = inputs.pop("mode")
+            # classic MLM
+            if "entity_ids" in inputs:
+                entity_ids = inputs.pop("entity_ids")
+                self.training_step_kb(model=model)
+                mlm_mode = False
             else:
-                mode = None
-
-            if "triple" in inputs:
-                triple = inputs.pop("triple")
-            else:
-                triple = None
+                mlm_mode = True
 
             labels = inputs["labels"]
             inputs = self._prepare_inputs(inputs)
@@ -400,20 +362,18 @@ class MlmTrainer(Trainer):
 
                 self.metric_bert.update(loss.item())
 
-            if not self.fit_bert and self.distillation.do_distill_kg:
+            if not self.fit_bert and self.distillation.do_distill_kg and not mlm_mode:
 
                 outputs = model(
                     input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"]
                 )
 
-            if self.distillation.do_distill_kg:
+            if self.distillation.do_distill_kg and not mlm_mode:
 
                 distillation_loss = self.distillation.distill_transe(
                     entities=entity_ids,
                     logits=outputs.logits,
                     labels=labels,
-                    modes=mode,
-                    triples=triple,
                 )
 
                 if distillation_loss != 0:
@@ -422,7 +382,7 @@ class MlmTrainer(Trainer):
 
                 model = model.eval()
 
-            if self.distillation.do_distill_kg and self.fit_bert:
+            if self.distillation.do_distill_kg and self.fit_bert and not mlm_mode:
 
                 if self.norm_loss:
 

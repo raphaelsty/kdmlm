@@ -50,7 +50,6 @@ class BertLogits:
     ...     dataset = dataset,
     ...     tokenizer = tokenizer,
     ...     entities = kb.entities,
-    ...     triples_mode = False,
     ...     k = 4,
     ...     n = 1000,
     ...     device = "cpu",
@@ -64,10 +63,10 @@ class BertLogits:
     >>> logits, index = distillation.logits[1197][0]
 
     >>> torch.round(logits)
-    tensor([10., 10.,  9.,  9.,  2.,  1., -3., -2.])
+    tensor([10., 10.,  9.,  9., -3.,  0., -1.,  1.])
 
     >>> index
-    tensor([ 4688,  4497,  3411,   591, 11929, 11130,  8086,  2208])
+    tensor([ 4688,  4497,  3411,   591,  5296,  7624,  3832, 12852])
 
     >>> e = {v: k for k, v in kb.entities.items()}
 
@@ -80,46 +79,10 @@ class BertLogits:
     Niger
     Sudan
     Nigeria
-    Kumasi
-    Eton College
-    Queen Mary, University of London
-    Emile Hirsch
-
-    >>> dataset = data.DataLoader(
-    ...    dataset = datasets.TriplesTorchSample(),
-    ...     collate_fn = datasets.Collator(tokenizer=tokenizer),
-    ...     batch_size = 6,
-    ... )
-
-    >>> from kdmlm import distillation
-
-    >>> distillation = distillation.BertLogits(
-    ...     model = model,
-    ...     dataset = dataset,
-    ...     tokenizer = tokenizer,
-    ...     entities = kb.entities,
-    ...     triples_mode = True,
-    ...     k = 4,
-    ...     n = 100,
-    ...     device = "cpu",
-    ...     max_tokens = 15,
-    ...     subwords_limit = 10,
-    ... )
-
-    >>> logits, candidates = distillation.logits["head-batch"][(531, 106, 357)]
-
-    >>> for c in candidates[:4]:
-    ...     print(e[c.item()])
-    Manhattan
-    Brooklyn
-    Queens
-    Harlem
-
-    >>> e[531]
-    'Manhattan'
-
-    >>> e[357]
-    'New York City'
+    Alien
+    The Portrait of a Lady
+    Girl with the Dragon Tattoo
+    crossover
 
     """
 
@@ -129,7 +92,6 @@ class BertLogits:
         tokenizer,
         dataset,
         entities,
-        triples_mode,
         max_tokens,
         subwords_limit,
         k,
@@ -152,8 +114,6 @@ class BertLogits:
 
         self.order = self.order.to(self.device)
 
-        self.triples_mode = triples_mode
-
         self.logits = self.update(model=model, dataset=dataset)
 
     def update(self, model, dataset):
@@ -169,13 +129,7 @@ class BertLogits:
         """
         n_distributions = 0
 
-        if self.triples_mode:
-            logits = {
-                "head-batch": {},
-                "tail-batch": {},
-            }
-        else:
-            logits = collections.defaultdict(list)
+        logits = collections.defaultdict(list)
 
         bar = tqdm.tqdm(
             range(min(self.n // dataset.batch_size, len(dataset))),
@@ -184,28 +138,27 @@ class BertLogits:
         )
 
         with bar:
+
             for sample in dataset:
 
-                if "mode" not in sample:
-                    sample["mode"] = None
-                    sample["triple"] = None
-
                 with torch.no_grad():
-                    for (entity, l, index, h, r, t, mode) in self._top_k(model=model, **sample):
+
+                    if "entity_ids" not in sample:
+                        continue
+
+                    for (entity, l, index) in self._top_k(model=model, **sample):
 
                         if entity in self.filter_entities:
 
-                            if self.triples_mode:
-                                logits[mode][(h, r, t)] = (l, index)
-
-                            else:
-                                logits[entity].append((l, index))
+                            logits[entity].append((l, index))
                             n_distributions += 1
 
                     bar.update(1)
 
+                n_logits = len(logits)
+
                 bar.set_description(
-                    f"Updating Bert logits, {n_distributions} distributions, {len(logits)} entities."
+                    f"Updating Bert logits, {n_distributions} distributions, {n_logits} entities."
                 )
 
                 if n_distributions >= self.n:
@@ -213,7 +166,7 @@ class BertLogits:
 
         return logits
 
-    def _top_k(self, model, input_ids, attention_mask, labels, entity_ids, mode, triple, **kwargs):
+    def _top_k(self, model, input_ids, attention_mask, labels, entity_ids, **kwargs):
         """Yield probabilities distribution for a given sample.
 
         Parameters
@@ -248,14 +201,8 @@ class BertLogits:
 
         for i, entity in enumerate(entity_ids):
 
-            if mode is not None:
-                h, r, t = triple[i]
-                m = mode[i]
-            else:
-                h, r, t, m = None, None, None, None
-
             random_k_logits = torch.index_select(logits[i], 0, random_k[i])
 
             yield entity.item(), torch.cat([top_k_logits[i], random_k_logits]), torch.cat(
                 [top_k[i], random_k[i]]
-            ), h, r, t, m
+            )

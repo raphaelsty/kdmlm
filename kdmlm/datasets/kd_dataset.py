@@ -78,27 +78,113 @@ class KDDataset(Dataset):
     >>> entities[11190]
     'James Buchanan'
 
-
     """
 
-    def __init__(self, dataset, tokenizer, n_masks=None, sep="|"):
+    def __init__(self, dataset, tokenizer, n_masks=None, sep="|", mlm_probability=0):
         self.dataset = dataset
         self.tokenizer = tokenizer
         self.sep = sep
         self.n_masks = n_masks
         self.collator = Collator(tokenizer=tokenizer)
+        self.mlm_probability = mlm_probability
 
     def __getitem__(self, idx):
         sentence, entity_id = self.dataset[idx]
-        input_ids = self.tokenizer.encode(sentence)
-        data = self.get_mask_labels_ids(
-            sentence=self.tokenizer.tokenize(sentence), input_ids=input_ids, n_masks=self.n_masks
-        )
-        data["entity_ids"] = torch.tensor([entity_id])
+
+        if self.mlm_probability < torch.rand(1).item():
+
+            input_ids = self.tokenizer.encode(sentence)
+
+            data = self.get_mask_labels_ids(
+                sentence=self.tokenizer.tokenize(sentence),
+                input_ids=input_ids,
+                n_masks=self.n_masks,
+            )
+
+            data["entity_ids"] = torch.tensor([entity_id])
+
+        else:
+
+            sentence = sentence.replace(self.sep, "")
+            sentence = sentence.replace("  ", " ")
+            input_ids = self.tokenizer.encode(sentence)
+
+            data = self.get_mlm_masking(
+                sentence=self.tokenizer.tokenize(sentence),
+                input_ids=input_ids,
+            )
+
         return data
 
     def __len__(self):
         return self.dataset.__len__()
+
+    def get_mlm_masking(self, sentence, input_ids):
+        """Default mlm masking
+
+
+        Example:
+        --------
+        >>> import pathlib
+
+        >>> from pprint import pprint
+
+        >>> from kdmlm import datasets
+        >>> from mkb import datasets as mkb_datasets
+
+        >>> import torch
+        >>> from torch.utils.data import DataLoader
+
+        >>> _ = torch.manual_seed(42)
+
+        >>> folder = pathlib.Path(__file__).parent.joinpath('./../datasets/sentences')
+
+        >>> from transformers import BertTokenizer
+        >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+        >>> entities = mkb_datasets.Fb15k237(1, pre_compute=False).entities
+
+        >>> dataset = datasets.KDDataset(
+        ...     dataset=datasets.LoadFromFolder(folder=folder,
+        ...         entities=entities,
+        ...         tokenizer=tokenizer
+        ...     ),
+        ...     tokenizer=tokenizer,
+        ...     sep='|',
+        ...     mlm_probability=1,
+        ... )
+
+        >>> data_loader = DataLoader(
+        ...    dataset,
+        ...    batch_size=2,
+        ...    collate_fn=datasets.Collator(tokenizer=tokenizer),
+        ... )
+
+        >>> for data in data_loader:
+        ...     break
+
+        >>> for id, input_id in enumerate(data["input_ids"].tolist()[0]):
+        ...     if input_id == tokenizer.mask_token_id:
+        ...         break
+
+        >>> data["mask"].tolist()[0][id]
+        True
+
+        >>> list(data.keys())
+        ['input_ids', 'labels', 'mask', 'attention_mask']
+
+        """
+        sentence.insert(0, self.tokenizer.cls_token)
+        sentence.append(self.tokenizer.sep_token)
+        mask_id = torch.randint(low=1, high=len(sentence) - 2, size=(1,)).item()
+        mask = [False if i != mask_id else True for i in range(len(input_ids))]
+        labels = [-100 if i != mask_id else input_id for i, input_id in enumerate(input_ids)]
+        ids = [
+            input_id if i != mask_id else self.tokenizer.mask_token_id
+            for i, input_id in enumerate(input_ids)
+        ]
+
+        return {"mask": mask, "labels": labels, "input_ids": ids}
 
     def get_mask_labels_ids(self, sentence, input_ids, n_masks=None):
         """Mask first entity in the sequence and return corresponding labels.
