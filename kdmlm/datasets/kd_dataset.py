@@ -178,7 +178,7 @@ class KDDataset(Dataset):
         """
         sentence.insert(0, self.tokenizer.cls_token)
         sentence.append(self.tokenizer.sep_token)
-        mask_id = torch.randint(low=1, high=len(sentence) - 2, size=(1,)).item()
+        mask_id = random.uniform(1, len(sentence) - 2)
 
         if random.uniform(0, 1) < 0.2:
             mask = [False for _ in range(len(input_ids))]
