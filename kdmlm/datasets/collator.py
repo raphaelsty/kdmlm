@@ -12,6 +12,18 @@ class Collator(DataCollatorForLanguageModeling):
 
     def __call__(self, examples):
         """Pad input examples and replace masked tokens with [MASK]."""
+
+        # Handle mlm probability.
+        if "entity_ids" in examples[0]:
+            examples = [x for x in examples if "entity_ids" in x]
+        else:
+            new_examples = []
+            for x in examples:
+                if "entity_ids" in x:
+                    x.pop("entity_ids")
+                new_examples.append(x)
+            examples = new_examples
+
         batch = {
             "input_ids": _collate_batch(
                 [x["input_ids"] for x in examples],
@@ -31,7 +43,6 @@ class Collator(DataCollatorForLanguageModeling):
         }
 
         if "entity_ids" in examples[0]:
-
             batch["entity_ids"] = torch.stack([x["entity_ids"] for x in examples])
 
         batch["input_ids"], batch["labels"] = self.replace_tokens(
