@@ -398,11 +398,10 @@ class MlmTrainer(Trainer):
 
                 loss = distillation_loss
 
-            if loss != 0:
+        if loss != 0:
 
-                loss.backward()
-
-                loss = loss.detach()
+            loss.backward()
+            loss = loss.detach()
 
         return loss
 
