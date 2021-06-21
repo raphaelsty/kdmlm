@@ -1,3 +1,5 @@
+import random
+
 import torch
 from torch.utils.data import Dataset
 
@@ -91,7 +93,7 @@ class KDDataset(Dataset):
     def __getitem__(self, idx):
         sentence, entity_id = self.dataset[idx]
 
-        if self.mlm_probability < torch.rand(1).item():
+        if self.mlm_probability < random.uniform(0, 1):
 
             input_ids = self.tokenizer.encode(sentence)
 
@@ -178,7 +180,7 @@ class KDDataset(Dataset):
         sentence.append(self.tokenizer.sep_token)
         mask_id = torch.randint(low=1, high=len(sentence) - 2, size=(1,)).item()
 
-        if torch.rand(1).item() < 0.2:
+        if random.uniform(0, 1) < 0.2:
             mask = [False for _ in range(len(input_ids))]
         else:
             mask = [False if i != mask_id else True for i in range(len(input_ids))]
