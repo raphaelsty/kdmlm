@@ -178,8 +178,12 @@ class KDDataset(Dataset):
         """
         sentence.insert(0, self.tokenizer.cls_token)
         sentence.append(self.tokenizer.sep_token)
-        mask_id = random.uniform(1, len(sentence) - 2)
-        mask = [False if i != mask_id else True for i in range(len(input_ids))]
+        mask_id = random.randint(1, len(sentence) - 2)
+        if random.uniform(0, 1) > 0.1:
+            mask = [False if i != mask_id else True for i in range(len(input_ids))]
+        else:
+            mask = [False for i in range(len(input_ids))]
+
         labels = [-100 if i != mask_id else input_id for i, input_id in enumerate(input_ids)]
         ids = [
             input_id if i != mask_id else self.tokenizer.mask_token_id

@@ -111,9 +111,9 @@ class MlmTrainer(Trainer):
     ...    alpha = 0.3,
     ...    seed = 42,
     ...    fit_bert = True,
-    ...    fit_kb = True,
-    ...    do_distill_kg = True,
-    ...    do_distill_bert = True,
+    ...    fit_kb = False,
+    ...    do_distill_kg = False,
+    ...    do_distill_bert = False,
     ...    path_score_kb = 'evaluation.csv',
     ...    norm_loss = False,
     ...    max_step_bert = 10,
@@ -379,8 +379,6 @@ class MlmTrainer(Trainer):
                 if distillation_loss != 0:
 
                     self.metric_bert_kl.update(distillation_loss.item())
-
-                model = model.eval()
 
             if self.distillation.do_distill_kg and self.fit_bert and not mlm_mode:
 
