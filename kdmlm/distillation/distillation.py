@@ -230,7 +230,8 @@ class Distillation:
         if teacher_score:
             teacher_score = torch.stack(teacher_score, dim=0)
             student_score = kb_model(torch.stack(samples, dim=0).to(self.device))
-            loss += self.kl_divergence(teacher_score=teacher_score, student_score=student_score)
+            loss += nn.MSELoss()(teacher_score, student_score)
+            # loss += self.kl_divergence(teacher_score=teacher_score, student_score=student_score)
 
         return loss
 
@@ -261,8 +262,7 @@ class Distillation:
             student_score = torch.stack(student_score, dim=0)
             teacher_score = torch.stack(teacher_score, dim=0)
 
-            loss += nn.MSELoss()(teacher_score, student_score)
-            # loss += self.kl_divergence(teacher_score=teacher_score, student_score=student_score)
+            loss += self.kl_divergence(teacher_score=teacher_score, student_score=student_score)
 
         return loss
 
