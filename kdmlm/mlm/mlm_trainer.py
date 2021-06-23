@@ -337,6 +337,8 @@ class MlmTrainer(Trainer):
         loss = 0
         distillation_loss = 0
 
+        self.training_step_kb(model=model)
+
         if self.fit_bert or self.distillation.do_distill_kg:
 
             model = model.train()
@@ -345,7 +347,6 @@ class MlmTrainer(Trainer):
             # classic MLM
             if "entity_ids" in inputs:
                 entity_ids = inputs.pop("entity_ids")
-                self.training_step_kb(model=model)
                 mlm_mode = False
             else:
                 mlm_mode = True
