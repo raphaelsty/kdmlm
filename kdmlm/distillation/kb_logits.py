@@ -118,7 +118,7 @@ class KbLogits:
                             r=r,
                             t=t,
                             tensor_distillation=self.heads,
-                            mode="head-batch",
+                            mode="tail-batch",  # WRONG
                         )
 
                         logits[h].append((score, index))
@@ -133,7 +133,7 @@ class KbLogits:
                             r=r,
                             t=t,
                             tensor_distillation=self.tails,
-                            mode="tail-batch",
+                            mode="head-batch",  # WRONG
                         )
 
                         logits[t].append((score, index))

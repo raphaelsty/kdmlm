@@ -263,7 +263,7 @@ class Distillation:
                             head=h,
                             relation=r,
                             tail=t,
-                            mode="tail-batch",  # WRONG BUT JUST TO TRY
+                            mode="head-batch",
                             heads=self.heads,
                             tails=self.tails,
                         )
@@ -279,7 +279,7 @@ class Distillation:
                             head=h,
                             relation=r,
                             tail=t,
-                            mode="head-batch",  # WRONG BUT JUST TO TRY
+                            mode="tail-batch",
                             heads=self.heads,
                             tails=self.tails,
                         )
