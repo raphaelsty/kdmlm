@@ -1,9 +1,10 @@
 __all__ = ["Distillation"]
 
-import collections
 import random
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from mkb import losses as mkb_losses
 
 from ..utils import distillation_index, get_tensor_distillation
@@ -16,159 +17,6 @@ class Distillation:
 
     Examples
     --------
-
-    >>> from kdmlm import distillation
-    >>> from torch.utils import data
-
-    >>> import torch
-    >>> _ = torch.manual_seed(42)
-
-    >>> from kdmlm import datasets
-    >>> from kdmlm import distillation
-
-    >>> from mkb import datasets as mkb_datasets
-    >>> from mkb import models as mkb_models
-
-    >>> from transformers import DistilBertTokenizer
-    >>> from transformers import DistilBertForMaskedLM
-
-    >>> device = 'cpu'
-
-    >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-    >>> bert_model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
-
-    >>> dataset = data.DataLoader(
-    ...    dataset = datasets.KDDataset(
-    ...        dataset = datasets.Sample(),
-    ...        tokenizer = tokenizer,
-    ...        sep = '|',
-    ...     ),
-    ...     collate_fn = datasets.Collator(tokenizer=tokenizer),
-    ...     batch_size = 6,
-    ... )
-
-    >>> kb = mkb_datasets.Fb15k237(2, pre_compute=False, num_workers=0)
-
-    >>> kb_model = mkb_models.TransE(
-    ...     hidden_dim = 10,
-    ...     gamma = 6,
-    ...     entities = kb.entities,
-    ...     relations = kb.relations,
-    ... )
-
-    >>> distillation = distillation.Distillation(
-    ...     bert_model = bert_model,
-    ...     kb_model = kb_model,
-    ...     kb = kb,
-    ...     dataset = dataset,
-    ...     tokenizer = tokenizer,
-    ...     entities = kb.entities,
-    ...     k = 3,
-    ...     n = 10,
-    ...     max_tokens = 1,
-    ...     subwords_limit = 1000,
-    ...     device = device,
-    ... )
-
-    >>> sample = torch.tensor([
-    ...    [11839, 0, 10],
-    ...    [11190, 1, 11],
-    ...    [11838, 2, 12]
-    ... ])
-
-
-    >>> distillation.distill_bert(
-    ...     kb_model = kb_model,
-    ...     sample = sample,
-    ... )
-    tensor(0.2421, grad_fn=<AddBackward0>)
-
-    >>> entities = {value: key for key, value in kb.entities.items()}
-
-    >>> entities[4186]
-    'Bend It Like Beckham'
-
-    >>> entities[5255]
-    'Body of Lies'
-
-    >>> entities[8772]
-    '39th Canadian Parliament'
-
-    >>> sentences = [
-    ...     ("| Bend It Like Beckham | is the fist entity.", 4186),
-    ...     ("| domestic partnership | is the second entity.", 5255),
-    ...     ("| Gene Stupnitsky | is third entity.", 8772)
-    ... ]
-
-    >>> dataset = data.DataLoader(
-    ...    dataset = datasets.KDDataset(
-    ...        dataset = sentences,
-    ...        tokenizer = tokenizer,
-    ...        sep = '|',
-    ...     ),
-    ...     collate_fn = datasets.Collator(tokenizer=tokenizer),
-    ...     batch_size = 3,
-    ... )
-
-    >>> for sample in dataset:
-    ...     break
-
-    >>> output = bert_model(
-    ...     input_ids = sample["input_ids"],
-    ...     attention_mask = sample["attention_mask"],
-    ... )
-
-    >>> distillation.distill_transe(
-    ...     entities = sample["entity_ids"],
-    ...     logits = output.logits,
-    ...     labels = sample["labels"],
-    ... )
-    tensor(0.2229, grad_fn=<AddBackward0>)
-
-    >>> candidates  = torch.tensor([11953,  8827,  7336,  2674,  4347,  9020])
-
-    >>> distillation.distillation_sample(
-    ...     candidates = candidates,
-    ...     head = 574,
-    ...     relation = 0,
-    ...     tail = 1,
-    ...     mode = 'head-batch',
-    ...     heads = distillation.heads,
-    ...     tails = distillation.tails,
-    ... )
-    tensor([[11953,     0,     1],
-            [ 8827,     0,     1],
-            [ 7336,     0,     1],
-            [ 2674,     0,     1],
-            [ 4347,     0,     1],
-            [ 9020,     0,     1]])
-
-    >>> distillation.distillation_sample(
-    ...     candidates = candidates,
-    ...     head = 574,
-    ...     relation = 0,
-    ...     tail = 1,
-    ...     mode = 'tail-batch',
-    ...     heads = distillation.heads,
-    ...     tails = distillation.tails,
-    ... )
-    tensor([[  574,     0, 11953],
-            [  574,     0,  8827],
-            [  574,     0,  7336],
-            [  574,     0,  2674],
-            [  574,     0,  4347],
-            [  574,     0,  9020]])
-
-    >>> distillation = distillation.update_kb(
-    ...     kb = kb,
-    ...     kb_model = kb_model,
-    ... )
-
-    >>> distillation = distillation.update_bert(
-    ...     model = bert_model,
-    ...     tokenizer = tokenizer,
-    ...     dataset = dataset,
-    ... )
 
     """
 
@@ -244,7 +92,100 @@ class Distillation:
             return tails.clone().detach()
 
     def distill_bert(self, kb_model, sample):
-        """Distill Bert to TransE from knowledge base."""
+        """Distill Bert to TransE from knowledge base.
+
+        >>> from kdmlm import distillation
+        >>> from torch.utils import data
+
+        >>> import torch
+        >>> _ = torch.manual_seed(42)
+
+        >>> from kdmlm import datasets
+        >>> from kdmlm import distillation
+
+        >>> from mkb import datasets as mkb_datasets
+        >>> from mkb import models as mkb_models
+
+        >>> from transformers import DistilBertTokenizer
+        >>> from transformers import DistilBertForMaskedLM
+
+        >>> device = 'cpu'
+
+        >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+        >>> bert_model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
+
+        >>> dataset = data.DataLoader(
+        ...    dataset = datasets.KDDataset(
+        ...        dataset = datasets.Sample(),
+        ...        tokenizer = tokenizer,
+        ...        sep = '|',
+        ...     ),
+        ...     collate_fn = datasets.Collator(tokenizer=tokenizer),
+        ...     batch_size = 6,
+        ... )
+
+        >>> kb = mkb_datasets.Fb15k237(2, pre_compute=False, num_workers=0)
+
+        >>> kb_model = mkb_models.TransE(
+        ...     hidden_dim = 10,
+        ...     gamma = 6,
+        ...     entities = kb.entities,
+        ...     relations = kb.relations,
+        ... )
+
+        >>> distillation = distillation.Distillation(
+        ...     bert_model = bert_model,
+        ...     kb_model = kb_model,
+        ...     kb = kb,
+        ...     dataset = dataset,
+        ...     tokenizer = tokenizer,
+        ...     entities = kb.entities,
+        ...     k = 3,
+        ...     n = 10,
+        ...     max_tokens = 1,
+        ...     subwords_limit = 1000,
+        ...     device = device,
+        ... )
+
+        >>> entities_bert = list(distillation.bert_logits.logits.keys())
+
+        >>> entities_bert
+        [11839, 11190, 11838, 6133, 12603, 5136, 3805, 4721, 1197, 2421, 12127]
+
+        >>> entities = {v: k for k, v in kb.entities.items()}
+
+        >>> for e in entities_bert:
+        ...     print(entities[e])
+        Zachary Taylor
+        James Buchanan
+        Confederate States of America
+        William Tecumseh Sherman
+        Mississippi River
+        Ulysses S. Grant
+        James Madison
+        West Virginia
+        Nevada
+        Illinois
+        nationalism
+
+        >>> for _, candidates in distillation.bert_logits.logits[2421]:
+        ...     for c in candidates.tolist():
+        ...         print(entities[c])
+        Ohio University
+        Ohio State Buckeyes football
+        Ohio
+        Creighton University
+        Joshua Redman
+        Helen
+
+        >>> sample = torch.tensor([
+        ...    [11839, 0, 2421],
+        ...    [11839, 1, 2421]
+        ... ])
+
+
+        >>> distillation.distill_bert(kb_model = kb_model, sample = sample)
+        """
         samples, teacher_score = [], []
 
         if self.do_distill_bert:
@@ -319,7 +260,9 @@ class Distillation:
         if teacher_score:
             student_score = torch.stack(student_score, dim=0)
             teacher_score = torch.stack(teacher_score, dim=0)
-            loss += self.kl_divergence(teacher_score=teacher_score, student_score=student_score)
+
+            loss += nn.MSELoss()(teacher_score, student_score)
+            # loss += self.kl_divergence(teacher_score=teacher_score, student_score=student_score)
 
         return loss
 
