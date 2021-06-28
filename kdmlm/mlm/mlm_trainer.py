@@ -285,7 +285,6 @@ class MlmTrainer(Trainer):
                         self.distillation.update_bert(
                             model=model,
                             dataset=self.dataset_logits,
-                            tokenizer=self.tokenizer,
                         )
 
                     self.step_bert += 1
