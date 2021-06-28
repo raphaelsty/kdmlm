@@ -30,6 +30,7 @@ class Distillation:
         entities,
         k,
         n,
+        temperature=1,
         do_distill_bert=True,
         do_distill_kg=True,
         max_tokens=15,
@@ -40,6 +41,7 @@ class Distillation:
         self.do_distill_bert = do_distill_bert
         self.do_distill_kg = do_distill_kg
         self.device = device
+        self.temperature = temperature
 
         if self.do_distill_bert:
 
@@ -145,6 +147,7 @@ class Distillation:
         ...     max_tokens = 1,
         ...     subwords_limit = 1000,
         ...     device = device,
+        ...     temperature = 10,
         ... )
 
         >>> entities_bert = list(distillation.bert_logits.logits.keys())
@@ -230,8 +233,9 @@ class Distillation:
         if teacher_score:
             teacher_score = torch.stack(teacher_score, dim=0)
             student_score = kb_model(torch.stack(samples, dim=0).to(self.device))
-            # loss += nn.MSELoss()(teacher_score, student_score)
-            loss += self.kl_divergence(teacher_score=teacher_score, student_score=student_score)
+            loss += self.kl_divergence(
+                teacher_score=teacher_score, student_score=student_score, T=self.temperature
+            )
 
         return loss
 
@@ -262,17 +266,11 @@ class Distillation:
             student_score = torch.stack(student_score, dim=0)
             teacher_score = torch.stack(teacher_score, dim=0)
 
-            loss += self.kl_divergence(teacher_score=teacher_score, student_score=student_score)
+            loss += self.kl_divergence(
+                teacher_score=teacher_score, student_score=student_score, T=self.temperature
+            )
 
         return loss
-
-    def kl_divergence(self, teacher_score, student_score):
-        error = 0
-        if len(teacher_score) > 0:
-            error = mkb_losses.KlDivergence()(
-                student_score=student_score, teacher_score=teacher_score
-            )
-        return error
 
     def update_kb(self, kb, kb_model):
         """Updates distributions."""
@@ -280,8 +278,19 @@ class Distillation:
             self.kb_logits.logits = self.kb_logits.update(dataset=kb, model=kb_model)
         return self
 
-    def update_bert(self, dataset, tokenizer, model):
+    def update_bert(self, dataset, model):
         """Updates distributions."""
         if self.do_distill_bert:
             self.bert_logits.logits = self.bert_logits.update(dataset=dataset, model=model)
         return self
+
+    @staticmethod
+    def kl_divergence(teacher_score, student_score, T):
+        error = 0
+        if len(teacher_score) > 0:
+            error = mkb_losses.KlDivergence()(
+                student_score=student_score,
+                teacher_score=teacher_score,
+                T=T,
+            )
+        return error

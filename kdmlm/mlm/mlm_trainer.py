@@ -152,6 +152,7 @@ class MlmTrainer(Trainer):
         norm_loss=False,
         ewm_alpha=0.9997,
         max_step_bert=None,
+        temperature=1,
     ):
         super().__init__(
             model=model,
@@ -232,6 +233,7 @@ class MlmTrainer(Trainer):
             max_tokens=max_tokens,
             subwords_limit=subwords_limit,
             device=self.args.device,
+            temperature=temperature,
         )
 
         # Store kb evaluation scores
