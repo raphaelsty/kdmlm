@@ -50,7 +50,7 @@ def distillation_index(tokenizer, entities, subwords_limit):
     entities_to_bert = {}
     for e, id_e in entities.items():
         e = tokenizer.encode(e, add_special_tokens=False)
-        if len(e) <= subwords_limit:
+        if len(e) <= subwords_limit and len(e) > 0:
             entities_to_bert[id_e] = tokenizer.decode([e[0]])
 
     mapping_kb_bert = {
