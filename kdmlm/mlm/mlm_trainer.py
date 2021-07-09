@@ -80,7 +80,8 @@ class MlmTrainer(Trainer):
     ...     dataset=datasets.Sample(),
     ...     tokenizer=tokenizer,
     ...     sep='|',
-    ...     mlm_probability = 1,
+    ...     mlm_probability = 0,
+    ...     n_masks = 1,
     ... )
 
     >>> training_args = TrainingArguments(
@@ -111,12 +112,13 @@ class MlmTrainer(Trainer):
     ...    alpha = 0.3,
     ...    seed = 42,
     ...    fit_bert = True,
-    ...    fit_kb = False,
-    ...    do_distill_kg = False,
-    ...    do_distill_bert = False,
+    ...    fit_kb = True,
+    ...    do_distill_kg = True,
+    ...    do_distill_bert = True,
     ...    path_score_kb = 'evaluation.csv',
     ...    norm_loss = False,
     ...    max_step_bert = 10,
+    ...    entities_to_distill = [1, 2, 3],
     ... )
 
     >>> mlm_trainer.train()
@@ -153,6 +155,7 @@ class MlmTrainer(Trainer):
         ewm_alpha=0.9997,
         max_step_bert=None,
         temperature=1,
+        entities_to_distill=None,
     ):
         super().__init__(
             model=model,
@@ -234,6 +237,7 @@ class MlmTrainer(Trainer):
             subwords_limit=subwords_limit,
             device=self.args.device,
             temperature=temperature,
+            entities_to_distill=entities_to_distill,
         )
 
         # Store kb evaluation scores

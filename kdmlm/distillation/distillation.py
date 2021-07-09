@@ -37,6 +37,7 @@ class Distillation:
         subwords_limit=15,
         device="cuda",
         seed=42,
+        entities_to_distill=None,
     ):
         self.do_distill_bert = do_distill_bert
         self.do_distill_kg = do_distill_kg
@@ -55,6 +56,7 @@ class Distillation:
                 max_tokens=max_tokens,
                 subwords_limit=subwords_limit,
                 device=self.device,
+                entities_to_distill=entities_to_distill,
             )
 
         if self.do_distill_kg:
@@ -68,6 +70,7 @@ class Distillation:
                 n=n,
                 device=self.device,
                 subwords_limit=subwords_limit,
+                entities_to_distill=entities_to_distill,
             )
 
         self.heads, self.tails = get_tensor_distillation([_ for _ in range(k * 2)])

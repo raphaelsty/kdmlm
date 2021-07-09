@@ -97,6 +97,7 @@ class BertLogits:
         k,
         n,
         device,
+        entities_to_distill=None,
     ):
         self.k = k
         self.n = n
@@ -110,7 +111,12 @@ class BertLogits:
             tokenizer=tokenizer, max_tokens=self.max_tokens, entities=entities
         )
 
-        self.filter_entities = {e.item(): True for e in self.kb_entities}
+        if entities_to_distill is not None:
+            self.filter_entities = {
+                e.item(): True for e in self.kb_entities if e in entities_to_distill
+            }
+        else:
+            self.filter_entities = {e.item(): True for e in self.kb_entities}
 
         self.order = self.order.to(self.device)
 

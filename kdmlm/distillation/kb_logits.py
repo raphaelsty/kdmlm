@@ -70,7 +70,18 @@ class KbLogits:
 
     """
 
-    def __init__(self, dataset, model, entities, tokenizer, subwords_limit, k, n, device):
+    def __init__(
+        self,
+        dataset,
+        model,
+        entities,
+        tokenizer,
+        subwords_limit,
+        k,
+        n,
+        device,
+        entities_to_distill=None,
+    ):
         self.k = k
         self.n = n
         self.device = device
@@ -82,6 +93,13 @@ class KbLogits:
 
         # Entities filtered with subwords_limit
         self.filter_entities = {e.item(): True for e in kb_entities}
+
+        if entities_to_distill is not None:
+            self.filter_entities = {
+                e.item(): True for e in kb_entities if e in entities_to_distill
+            }
+        else:
+            self.filter_entities = {e.item(): True for e in kb_entities}
 
         self.heads, self.tails = get_tensor_distillation(kb_entities)
         self.heads, self.tails = self.heads.to(self.device), self.tails.to(self.device)
