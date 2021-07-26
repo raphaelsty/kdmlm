@@ -80,6 +80,12 @@ class KDDataset(Dataset):
     >>> entities[11190]
     'James Buchanan'
 
+    >>> tokenizer.decode([19474])
+    'zachary'
+
+    >>> tokenizer.decode([2508])
+    'james'
+
     """
 
     def __init__(self, dataset, tokenizer, n_masks=None, sep="|", mlm_probability=0):

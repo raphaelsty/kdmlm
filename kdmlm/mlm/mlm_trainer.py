@@ -7,7 +7,6 @@ from creme import stats
 from mkb import losses as mkb_losses
 from mkb import sampling as mkb_sampling
 from torch.utils import data
-from torch.utils.data import DataLoader
 from transformers import Trainer
 
 from ..distillation import Distillation
@@ -121,7 +120,12 @@ class MlmTrainer(Trainer):
     ...    entities_to_distill = [1, 2, 3],
     ... )
 
-    >>> mlm_trainer.train()
+    >>> import kdmlm
+
+    >>> try:
+    ...     mlm_trainer.train()
+    ... except kdmlm.mlm.mlm_trainer.EndTrainingException:
+    ...     pass
 
     """
 

@@ -28,7 +28,7 @@ class TorchSample(LoadFromTorchFolder):
     ...     break
 
     >>> data.keys()
-    dict_keys(['input_ids', 'labels', 'mask', 'entity_ids', 'attention_mask'])
+     dict_keys(['input_ids', 'labels', 'mask', 'entity_ids', 'attention_mask', 'mode', 'triple'])
 
     """
 

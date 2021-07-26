@@ -22,8 +22,6 @@ class Fb15k237Types:
     >>> "Renault" in types
     False
 
-    >>> types
-
     """
 
     def __init__(self):

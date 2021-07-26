@@ -3,8 +3,6 @@ __all__ = ["Distillation"]
 import random
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from mkb import losses as mkb_losses
 
 from ..utils import distillation_index, get_tensor_distillation
@@ -74,11 +72,13 @@ class Distillation:
             )
 
         self.heads, self.tails = get_tensor_distillation([_ for _ in range(k * 2)])
+
         self.bert_entities, self.kb_entities = distillation_index(
             tokenizer=tokenizer,
             entities=entities,
             subwords_limit=subwords_limit,
         )
+
         self.bert_entities = self.bert_entities.to(self.device)
 
         random.seed(seed)
@@ -189,8 +189,9 @@ class Distillation:
         ...    [11839, 1, 2421]
         ... ])
 
-
         >>> distillation.distill_bert(kb_model = kb_model, sample = sample)
+        tensor(0.0209, grad_fn=<AddBackward0>)
+
         """
         samples, teacher_score = [], []
 

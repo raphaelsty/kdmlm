@@ -62,27 +62,23 @@ class BertLogits:
 
     >>> logits, index = distillation.logits[1197][0]
 
-    >>> torch.round(logits)
-    tensor([10., 10.,  9.,  9., -3.,  0., -1.,  1.])
+    >>> torch.round(logits).tolist()[:4]
+    [10., 10.,  9.,  9.]
 
-    >>> index
-    tensor([ 4688,  4497,  3411,   591,  5296,  7624,  3832, 12852])
+    >>> index.tolist()[:4]
+    [4688, 4497, 3411, 591]
 
     >>> e = {v: k for k, v in kb.entities.items()}
 
     >>> e[4688]
     'Liberia'
 
-    >>> for i in index:
-    ...     print(e[i.item()])
+    >>> for i in index.tolist()[:4]:
+    ...     print(e[i])
     Liberia
     Niger
     Sudan
     Nigeria
-    Alien
-    The Portrait of a Lady
-    Girl with the Dragon Tattoo
-    crossover
 
     """
 
@@ -133,6 +129,12 @@ class BertLogits:
             dataset: kdmlm.KdDataset.
 
         """
+        mlm_probability = 0
+        mlm_probability, dataset.dataset.mlm_probability = (
+            dataset.dataset.mlm_probability,
+            mlm_probability,
+        )
+
         n_distributions = 0
 
         logits = collections.defaultdict(list)
@@ -170,6 +172,7 @@ class BertLogits:
                 if n_distributions >= self.n:
                     break
 
+        dataset.dataset.mlm_probability = mlm_probability
         return logits
 
     def _top_k(self, model, input_ids, attention_mask, labels, entity_ids, **kwargs):
