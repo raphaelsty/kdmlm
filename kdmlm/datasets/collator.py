@@ -55,7 +55,7 @@ class Collator(DataCollatorForLanguageModeling):
         return batch
 
     def replace_tokens(self, inputs, mask, labels):
-        """Replace masked tokens with a certain probability entities."""
+        """Replace masked tokens with a certain probability."""
         indices_replaced = torch.bernoulli(torch.full(labels.shape, 1.0)).bool() & mask
         inputs[indices_replaced] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
         return inputs, labels

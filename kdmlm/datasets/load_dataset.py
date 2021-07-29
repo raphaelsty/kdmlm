@@ -1,3 +1,4 @@
+import json
 import os
 import random
 
@@ -5,6 +6,122 @@ import torch
 import tqdm
 
 __all__ = ["LoadFromFile", "LoadFromFolder", "LoadFromTorch", "LoadFromTorchFolder"]
+
+
+class LoadFromJsonFile:
+    """Load data from json file.
+
+    Arguments:
+    ----------
+        path (str): Path to the file storing sentences.
+
+    Example:
+    --------
+    """
+
+    def __init__(self, path, encoding="utf-8"):
+        self.encoding = encoding
+        self.dataset = self.load(path=path, encoding=self.encoding)
+        self.len_file = len(self.dataset)
+
+    def __getitem__(self, idx):
+        sample = self.dataset[idx]
+        sentence, entity = sample["sentence"], sample["entity"]
+        return sentence, entity
+
+    def __len__(self):
+        return len(self.dataset)
+
+    @staticmethod
+    def load(path, encoding):
+        """Load json file."""
+        with open(path, encoding=encoding) as fp:
+            dataset = json.load(fp)
+        return dataset
+
+
+class LoadFromJsonFolder(LoadFromJsonFile):
+    """Load dataset from json folder.
+
+    Arguments
+    ---------
+
+    Example
+    -------
+
+    >>> from kdmlm import datasets
+
+    >>> import pathlib
+    >>> folder = pathlib.Path(__file__).parent.joinpath('./wiki_fb15k237one')
+
+    >>> kb = datasets.Fb15k237One(1, pre_compute=False)
+
+    >>> dataset = datasets.LoadFromJsonFolder(
+    ...     folder = folder,
+    ...     entities = kb.entities
+    ... )
+
+    >>> dataset[0]
+    ('Kenya Hockey Union The Kenya Hockey Union (KHU) is the sports governing body of field hockey in | Kenya |. Its headquarters are in Nairobi . It is affiliated to IHF International Hockey Federation and AHF African Hockey Federation.', 231)
+
+    >>> for i in range(100000):
+    ...    _ = dataset[i]
+
+    """
+
+    def __init__(self, folder, entities, encoding="utf-8", shuffle=False):
+        self.folder = folder
+        self.encoding = encoding
+        self.list_files = [file for file in os.listdir(folder) if "json" in file]
+        self.entities = entities
+        self.call = 0
+        self.id_file = 0
+
+        if shuffle:
+            random.seed(42)
+            random.shuffle(self.list_files)
+
+        super().__init__(
+            path=os.path.join(self.folder, self.list_files[self.id_file]), encoding=self.encoding
+        )
+
+    def __getitem__(self, idx):
+
+        if (self.call + 1) >= self.len_file:
+
+            # We iterate over a complete file.
+            self.call = 0
+
+            # If we have been trough all the file, i.e a complete epoch:
+            if (self.id_file + 1) == len(self.list_files):
+                self.id_file = 0
+            else:
+                self.id_file += 1
+
+            self.dataset = self.load(
+                path=os.path.join(self.folder, self.list_files[self.id_file]),
+                encoding=self.encoding,
+            )
+
+        i = 0
+        while True:
+            try:
+                sentence, entity = super().__getitem__(self.call + i)
+                entity_id = self.entities[entity]
+                self.call += 1
+                return sentence, entity_id
+            except:
+                # Need to switch of file:
+                if self.call + i >= self.len_file:
+                    self.call += i
+                    return self.__getitem__(idx)
+                # Just an entity not correctly parsed:
+                pass
+
+            i += 1
+
+    def __len__(self):
+        return self.len_file * len(self.list_files)
 
 
 class LoadFromFile:
@@ -20,7 +137,7 @@ class LoadFromFile:
 
     def __init__(self, path):
         self.dataset = self.load(path=path)
-        self.len_file = sum(1 for line in open(path))
+        self.len_file = sum(1 for _ in open(path))
 
     def __getitem__(self, idx):
         return self.dataset[idx].replace("\n", "")
@@ -91,9 +208,7 @@ class LoadFromFolder(LoadFromFile):
 
     """
 
-    def __init__(
-        self, folder, entities, tokenizer, subwords_limit=15, sep="|", shuffle=False, seed=42
-    ):
+    def __init__(self, folder, entities, tokenizer, subwords_limit=15, sep="|", shuffle=False):
         self.folder = folder
         self.list_files = os.listdir(folder)
         self.call = 0
