@@ -155,7 +155,12 @@ class BertLogits:
                         continue
 
                     # If not all samples have a label:
-                    if (sample["labels"] != -100).sum().item() != sample["labels"].shape[0]:
+
+                    sum_labels = (sample["labels"] != -100).sum().item()
+                    if (
+                        sum_labels != sample["labels"].shape[0]
+                        or sum_labels != sample["entity_ids"].shape[0]
+                    ):
                         continue
 
                     for (entity, l, index) in self._top_k(model=model, **sample):
