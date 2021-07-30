@@ -58,7 +58,7 @@ class BertLogits:
     ... )
 
     >>> len(distillation.logits.keys())
-    72
+    51
 
     >>> logits, index = distillation.logits[1197][0]
 
@@ -152,6 +152,10 @@ class BertLogits:
                 with torch.no_grad():
 
                     if "entity_ids" not in sample:
+                        continue
+
+                    # If not all samples have a label:
+                    if (sample["labels"] != -100).sum().item() != sample["labels"].shape[0]:
                         continue
 
                     for (entity, l, index) in self._top_k(model=model, **sample):

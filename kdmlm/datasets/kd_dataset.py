@@ -248,6 +248,8 @@ class KDDataset(Dataset):
 
         >>> from mkb import datasets as mkb_datasets
 
+        >>> import numpy as np
+
         >>> from pprint import pprint
 
         >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -275,6 +277,8 @@ class KDDataset(Dataset):
 
         >>> assert len(x['input_ids']) == len(x['mask']) and len(x['mask']) == len(x['labels'])
 
+        >>> assert (np.array(x["labels"]) != -100).sum() == 1
+
         >>> sentence = '| Renault Zoe | cars are fun to drive on French roads.'
 
         >>> x = dataset.get_mask_labels_ids(
@@ -285,6 +289,8 @@ class KDDataset(Dataset):
 
         >>> tokenizer.decode(x['input_ids'])
         '[CLS] [MASK] cars are fun to drive on french roads. [SEP]'
+
+        >>> assert (np.array(x["labels"]) != -100).sum() == 1
 
         >>> assert len(x['input_ids']) == len(x['mask']) and len(x['mask']) == len(x['labels'])
 
@@ -299,6 +305,8 @@ class KDDataset(Dataset):
         >>> tokenizer.decode(x['input_ids'])
         '[CLS] [MASK] [MASK] zoe cars are fun to drive on french roads. [SEP]'
 
+        >>> assert (np.array(x["labels"]) != -100).sum() == 1
+
         >>> assert len(x['input_ids']) == len(x['mask']) and len(x['mask']) == len(x['labels'])
 
         >>> sentence = '| Renault Zoe | cars are fun to drive on French roads.'
@@ -312,6 +320,8 @@ class KDDataset(Dataset):
         >>> tokenizer.decode(x['input_ids'])
         '[CLS] [MASK] [MASK] cars are fun to drive on french roads. [SEP]'
 
+        >>> assert (np.array(x["labels"]) != -100).sum() == 1
+
         >>> assert len(x['input_ids']) == len(x['mask']) and len(x['mask']) == len(x['labels'])
 
         >>> sentence = '| Renault Zoe | cars are fun to drive on | French | roads.'
@@ -324,6 +334,8 @@ class KDDataset(Dataset):
 
         >>> tokenizer.decode(x['input_ids'])
         '[CLS] [MASK] cars are fun to drive on [MASK] roads. [SEP]'
+
+        >>> assert (np.array(x["labels"]) != -100).sum() == 2
 
         >>> assert len(x['input_ids']) == len(x['mask']) and len(x['mask']) == len(x['labels'])
 
@@ -340,6 +352,8 @@ class KDDataset(Dataset):
 
         >>> assert len(x['input_ids']) == len(x['mask']) and len(x['mask']) == len(x['labels'])
 
+        >>> assert (np.array(x["labels"]) != -100).sum() == 2
+
         >>> sentence = '| Renault Zoe | | cars | are fun to drive on | French | roads.'
 
         >>> x = dataset.get_mask_labels_ids(
@@ -353,6 +367,8 @@ class KDDataset(Dataset):
 
         >>> tokenizer.decode(x["labels"])
         '[UNK] renault [UNK] cars [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] french [UNK] [UNK] [UNK] [UNK]'
+
+        >>> assert (np.array(x["labels"]) != -100).sum() == 3
 
         >>> tokenizer.decode(x['input_ids'])
         '[CLS] [MASK] [MASK] [MASK] [MASK] are fun to drive on [MASK] [MASK] roads. [SEP]'

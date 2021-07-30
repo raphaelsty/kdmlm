@@ -132,7 +132,7 @@ def index(tokenizer, entities, window_size=2):
     """
     index = []
 
-    for key, value in entities.items():
+    for key, _ in entities.items():
 
         ids = tokenizer.encode(key, add_special_tokens=False)[:window_size]
 
@@ -250,7 +250,7 @@ def bert_top_k(logits, tokens, order, max_tokens, k, device="cuda"):
     ...     dataset = datasets.KDDataset(
     ...         dataset = datasets.Sample(),
     ...         tokenizer = tokenizer,
-    ...         n_masks = None,
+    ...         n_masks = 2,
     ...     ),
     ...     collate_fn = datasets.Collator(tokenizer=tokenizer),
     ...     batch_size = 3,
@@ -272,23 +272,23 @@ def bert_top_k(logits, tokens, order, max_tokens, k, device="cuda"):
     >>> e = {value: key for key, value in kb.entities.items()}
 
     >>> tokenizer.decode(sample["input_ids"][0])
-    '[CLS] realizing clay was unlikely to win the presidency, he supported general [MASK] [MASK] for the whig nomination in the a [SEP] [PAD]'
+    '[CLS] realizing clay was unlikely to win the presidency, he supported general [MASK] [MASK] for the whig nomination in the a [SEP]'
 
     >>> e[sample["entity_ids"][0].item()]
     'Zachary Taylor'
 
     >>> for s, c in zip(scores[0], candidates[0]):
     ...     print(f"{e[c.item()]}: {s:2f}")
-    John Abraham: 6.836702
-    Richard Benjamin: 6.816127
-    Henry James: 6.808833
-    William James: 6.785437
-    John Oliver: 6.747335
-    Benjamin Franklin: 6.655079
-    Andrew Jackson: 6.490297
-    Douglas Adams: 6.213402
-    John Adams: 6.156914
-    Jackson: 6.075762
+    John Abraham: 6.836697
+    Richard Benjamin: 6.816121
+    Henry James: 6.808829
+    William James: 6.785434
+    John Oliver: 6.747330
+    Benjamin Franklin: 6.655071
+    Andrew Jackson: 6.490291
+    Douglas Adams: 6.213394
+    John Adams: 6.156908
+    Jackson: 6.075756
 
     """
     scores = []

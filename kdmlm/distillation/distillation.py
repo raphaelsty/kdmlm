@@ -248,6 +248,10 @@ class Distillation:
         """Distill Transe to Bert."""
         student_score, teacher_score = [], []
 
+        # If not all samples have a label:
+        if (labels != -100).sum().item() != labels.shape[0]:
+            return 0
+
         if self.do_distill_kg:
 
             mask_labels = labels != -100
