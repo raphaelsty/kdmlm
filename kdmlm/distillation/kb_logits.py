@@ -113,7 +113,7 @@ class KbLogits:
         n_distributions = 0
 
         bar = tqdm.tqdm(
-            range(min(self.n // dataset.batch_size, len(dataset.train))),
+            range(min(self.n // dataset.batch_size, len(dataset.train) // dataset.batch_size)),
             desc=f"Updating kb logits, {n_distributions} distributions, {len(logits)} entities.",
             position=0,
         )
