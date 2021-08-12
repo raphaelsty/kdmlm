@@ -27,6 +27,7 @@ setuptools.setup(
             "datasets/fb15k237one/*.json",
             "datasets/fb15k237one/*.csv",
             "datasets/wiki_fb15k237one/*.json",
+            "datasets/wiki_fb15k237_test/*.json",
         ]
     },
     classifiers=[
