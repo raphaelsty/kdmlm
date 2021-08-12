@@ -3,15 +3,40 @@ import os
 import numpy as np
 import torch
 
-__all__ = ["perplexity"]
+__all__ = ["sentence_perplexity", "perplexity"]
 
 
-def perplexity(model, tokenizer, sentence):
+def sentence_perplexity(model, tokenizer, sentence):
     """Computes perplexity.
 
+    Example
+    -------
 
-    Examples
-    --------
+    >>> from kdmlm import utils
+
+    >>> from transformers import DistilBertTokenizer
+    >>> from transformers import DistilBertForMaskedLM
+
+    >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+    >>> model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
+
+    >>> utils.sentence_perplexity(
+    ...    model = model,
+    ...    tokenizer = tokenizer,
+    ...    sentence = 'Barack Obama is the president.',
+    ... )
+    3.68901411315264
+
+    """
+    input_ids = tokenizer.encode(sentence, return_tensors="pt")
+    return perplexity(model=model, input_ids=input_ids, mask_token_id=tokenizer.mask_token_id)
+
+
+def perplexity(model, input_ids, mask_token_id):
+    """
+
+    Example
+    -------
 
     >>> from kdmlm import utils
 
@@ -23,18 +48,17 @@ def perplexity(model, tokenizer, sentence):
 
     >>> utils.perplexity(
     ...    model = model,
-    ...    tokenizer = tokenizer,
-    ...    sentence = 'Barack Obama is the president.'
+    ...    input_ids = tokenizer.encode('Barack Obama is the president.', return_tensors="pt"),
+    ...    mask_token_id = tokenizer.mask_token_id,
     ... )
     3.68901411315264
 
     """
     os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
-    tensor_input = tokenizer.encode(sentence, return_tensors="pt")
-    repeat_input = tensor_input.repeat(tensor_input.size(-1) - 2, 1)
-    mask = torch.ones(tensor_input.size(-1) - 1).diag(1)[:-2]
-    masked_input = repeat_input.masked_fill(mask == 1, tokenizer.mask_token_id)
-    labels = repeat_input.masked_fill(masked_input != tokenizer.mask_token_id, -100)
+    repeat_input = input_ids.repeat(input_ids.size(-1) - 2, 1)
+    mask = torch.ones(input_ids.size(-1) - 1).diag(1)[:-2]
+    masked_input = repeat_input.masked_fill(mask == 1, mask_token_id)
+    labels = repeat_input.masked_fill(masked_input != mask_token_id, -100)
     with torch.no_grad():
         loss = model(input_ids=masked_input, labels=labels).loss.item()
     return np.exp(loss)

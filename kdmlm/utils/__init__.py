@@ -7,7 +7,7 @@ from .distillation import (
     mapping_entities,
 )
 from .filter import filter_entities
-from .perplexity import perplexity
+from .perplexity import perplexity, sentence_perplexity
 from .vocabulary import expand_bert_vocabulary
 from .wiki_process import WikiProcess
 
@@ -20,6 +20,7 @@ __all__ = [
     "filter_entities",
     "index",
     "mapping_entities",
+    "sentence_perplexity",
     "perplexity",
     "WikiProcess",
 ]

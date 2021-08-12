@@ -7,11 +7,13 @@ from .load_dataset import (
     LoadFromFolder,
     LoadFromJsonFile,
     LoadFromJsonFolder,
+    LoadFromMultiplesJsonFolder,
     LoadFromTorch,
     LoadFromTorchFolder,
 )
 from .sample import Sample
 from .torch_sample import TorchSample
+from .wiki_fb15k237_test import WikiFb15k237Test
 
 __all__ = [
     "Collator",
@@ -21,9 +23,11 @@ __all__ = [
     "LoadFromFile",
     "LoadFromFolder",
     "LoadFromJsonFolder",
+    "LoadFromMultiplesJsonFolder",
     "LoadFromJsonFile",
     "LoadFromTorch",
     "LoadFromTorchFolder",
     "Sample",
     "TorchSample",
+    "WikiFb15k237Test",
 ]

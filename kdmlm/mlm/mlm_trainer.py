@@ -1,15 +1,19 @@
 import os
 import random
+from lib2to3.pgen2.tokenize import tokenize
 
 import pandas as pd
 import torch
+import tqdm
 from creme import stats
 from mkb import losses as mkb_losses
 from mkb import sampling as mkb_sampling
 from torch.utils import data
 from transformers import Trainer
 
+from ..datasets import WikiFb15k237Test
 from ..distillation import Distillation
+from ..utils import sentence_perplexity
 
 __all__ = ["MlmTrainer"]
 
@@ -118,6 +122,8 @@ class MlmTrainer(Trainer):
     ...    norm_loss = False,
     ...    max_step_bert = 10,
     ...    entities_to_distill = [1, 2, 3],
+    ...    eval_bert_every = 10,
+    ...    max_step_evaluation = 10,
     ... )
 
     >>> import kdmlm
@@ -140,6 +146,7 @@ class MlmTrainer(Trainer):
         negative_sampling_size,
         kb_evaluation=None,
         eval_kb_every=None,
+        eval_bert_every=None,
         alpha=0.3,
         n=1000,
         top_k_size=100,
@@ -157,9 +164,10 @@ class MlmTrainer(Trainer):
         lr_kb=0.00005,
         norm_loss=False,
         ewm_alpha=0.9997,
-        max_step_bert=None,
+        max_step_bert=10 ** 10,
         temperature=1,
         entities_to_distill=None,
+        max_step_evaluation=None,
     ):
         super().__init__(
             model=model,
@@ -251,10 +259,20 @@ class MlmTrainer(Trainer):
         self.kb_evaluation = kb_evaluation
         self.eval_kb_every = eval_kb_every
 
+        self.tokenizer = tokenizer
+        self.eval_bert_every = eval_bert_every
+        self.test_dataset = WikiFb15k237Test()
+
+        self.max_step_evaluation = (
+            max_step_evaluation if max_step_evaluation is not None else len(self.test_dataset)
+        )
+
         self.metric_bert = stats.RollingMean(window_size=self.eval_kb_every)
         self.metric_kb = stats.RollingMean(window_size=self.eval_kb_every)
         self.metric_kb_kl = stats.RollingMean(window_size=self.eval_kb_every)
         self.metric_bert_kl = stats.RollingMean(window_size=self.eval_kb_every)
+        # Perplexity reset every time we call evaluation of Bert:
+        self.metric_perplexity = stats.RollingMean(window_size=self.max_step_evaluation)
 
     @staticmethod
     def print_scores(step, name, scores):
@@ -338,10 +356,9 @@ class MlmTrainer(Trainer):
 
     def training_step(self, model, inputs):
         """Training step."""
-        if self.max_step_bert is not None:
-            self.call += 1
-            if self.call > self.max_step_bert:
-                raise EndTrainingException
+        self.call += 1
+        if self.call > self.max_step_bert:
+            raise EndTrainingException
 
         loss = 0
         distillation_loss = 0
@@ -349,6 +366,32 @@ class MlmTrainer(Trainer):
         self.training_step_kb(model=model)
 
         if self.fit_bert or self.distillation.do_distill_kg:
+
+            # Eval perplexity every 100 steps:
+
+            if self.eval_bert_every is not None:
+
+                if (self.call + 1) % self.eval_bert_every == 0:
+
+                    bar = tqdm.tqdm(
+                        enumerate(self.test_dataset),
+                        position=0,
+                        desc="Evaluating PPL",
+                        total=self.max_step_evaluation,
+                    )
+
+                    for step_evaluation_bert, sentence in bar:
+
+                        if step_evaluation_bert > self.max_step_evaluation:
+                            break
+
+                        self.metric_perplexity.update(
+                            sentence_perplexity(
+                                model=model, tokenizer=self.tokenizer, sentence=sentence
+                            )
+                        )
+
+                        bar.set_description(f"Evaluating PPL {self.metric_perplexity.get():2f}")
 
             model = model.train()
             inputs.pop("mask")
@@ -474,6 +517,7 @@ class MlmTrainer(Trainer):
         score["kb_kl"] = self.metric_kb_kl.get()
         score["bert_loss"] = self.metric_bert.get()
         score["kb_loss"] = self.metric_kb.get()
+        score["perplexity"] = self.metric_perplexity.get()
         self.scores.append(pd.DataFrame.from_dict(score, orient="index").T)
         pd.concat(self.scores, axis="rows").to_csv(self.path_score_kb, index=False)
 

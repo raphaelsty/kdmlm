@@ -175,14 +175,11 @@ class Distillation:
         nationalism
 
         >>> for _, candidates in distillation.bert_logits.logits[2421]:
-        ...     for c in candidates.tolist():
+        ...     for c in candidates.tolist()[:3]:
         ...         print(entities[c])
         Ohio University
         Ohio State Buckeyes football
         Ohio
-        Lea Michele
-        William Friedkin
-        Province of Palermo
 
         >>> sample = torch.tensor([
         ...    [11839, 0, 2421],

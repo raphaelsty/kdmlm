@@ -5,7 +5,14 @@ import random
 import torch
 import tqdm
 
-__all__ = ["LoadFromFile", "LoadFromFolder", "LoadFromTorch", "LoadFromTorchFolder"]
+__all__ = [
+    "LoadFromFile",
+    "LoadFromFolder",
+    "LoadFromJsonFolder",
+    "LoadFromMultiplesJsonFolder",
+    "LoadFromTorch",
+    "LoadFromTorchFolder",
+]
 
 
 class LoadFromJsonFile:
@@ -67,6 +74,9 @@ class LoadFromJsonFolder(LoadFromJsonFile):
     >>> for i in range(100000):
     ...    _ = dataset[i]
 
+    >>> len(dataset)
+    60000
+
     """
 
     def __init__(self, folder, entities, encoding="utf-8", shuffle=False):
@@ -122,6 +132,61 @@ class LoadFromJsonFolder(LoadFromJsonFile):
 
     def __len__(self):
         return self.len_file * len(self.list_files)
+
+
+class LoadFromMultiplesJsonFolder:
+    """Load from multiples json folder.
+
+    >>> from kdmlm import datasets
+    >>> import torch
+
+    >>> _ = torch.manual_seed(42)
+
+    >>> import pathlib
+    >>> folder_1 = pathlib.Path(__file__).parent.joinpath('./wiki_fb15k237one')
+    >>> folder_2 = pathlib.Path(__file__).parent.joinpath('./wiki_fb15k237_test')
+
+    >>> kb = datasets.Fb15k237One(1, pre_compute=False)
+
+    >>> dataset = datasets.LoadFromMultiplesJsonFolder(
+    ...     folders = [folder_1, folder_2],
+    ...     entities = kb.entities
+    ... )
+
+    >>> dataset[0]
+    ('Kenya Hockey Union The Kenya Hockey Union (KHU) is the sports governing body of field hockey in | Kenya |. Its headquarters are in Nairobi . It is affiliated to IHF International Hockey Federation and AHF African Hockey Federation.', 231)
+
+    >>> for i in range(100000):
+    ...    _ = dataset[i]
+
+    >>> len(dataset)
+    70179
+
+    """
+
+    def __init__(
+        self,
+        folders: list,
+        entities: dict,
+        encoding: str = "utf-8",
+        shuffle: bool = False,
+        p: list = None,
+    ):
+
+        self.folders = [
+            LoadFromJsonFolder(
+                folder=folder, entities=entities, encoding=encoding, shuffle=shuffle
+            )
+            for folder in folders
+        ]
+
+        self.p = torch.tensor([1 / len(self.folders) for _ in range(len(self.folders))])
+
+    def __getitem__(self, idx):
+        return self.folders[torch.multinomial(self.p, 1).item()][idx]
+
+    def __len__(self):
+        return sum([len(folder) for folder in self.folders])
 
 
 class LoadFromFile:
