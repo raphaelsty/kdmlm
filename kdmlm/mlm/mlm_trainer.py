@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 import tqdm
 from creme import stats
+from kdmlm import distillation
 from mkb import losses as mkb_losses
 from mkb import sampling as mkb_sampling
 from torch.utils import data
@@ -106,9 +107,9 @@ class MlmTrainer(Trainer):
     ...    kb = kb,
     ...    kb_model = kb_model,
     ...    kb_evaluation = validation,
-    ...    eval_kb_every = 30,
+    ...    eval_every = 10,
     ...    negative_sampling_size = 10,
-    ...    fit_kb_n_times = 2,
+    ...    fit_kb_n_times = 1,
     ...    n = 10000,
     ...    top_k_size = 100,
     ...    update_top_k_every = 20,
@@ -118,11 +119,10 @@ class MlmTrainer(Trainer):
     ...    fit_kb = True,
     ...    do_distill_kg = True,
     ...    do_distill_bert = True,
-    ...    path_score_kb = 'evaluation.csv',
+    ...    path_evaluation = 'evaluation.csv',
     ...    norm_loss = False,
     ...    max_step_bert = 10,
     ...    entities_to_distill = [1, 2, 3],
-    ...    eval_bert_every = 10,
     ...    max_step_evaluation = 10,
     ... )
 
@@ -145,8 +145,7 @@ class MlmTrainer(Trainer):
         kb_model,
         negative_sampling_size,
         kb_evaluation=None,
-        eval_kb_every=None,
-        eval_bert_every=None,
+        eval_every=None,
         alpha=0.3,
         n=1000,
         top_k_size=100,
@@ -159,7 +158,7 @@ class MlmTrainer(Trainer):
         do_distill_bert=True,
         do_distill_kg=True,
         seed=42,
-        path_score_kb=None,
+        path_evaluation=None,
         path_model_kb=None,
         lr_kb=0.00005,
         norm_loss=False,
@@ -199,7 +198,7 @@ class MlmTrainer(Trainer):
         self.fit_kb_n_times = fit_kb_n_times
 
         self.path_model_kb = path_model_kb
-        self.path_score_kb = path_score_kb
+        self.path_evaluation = path_evaluation
         self.results = []
 
         if self.path_model_kb is not None:
@@ -257,20 +256,19 @@ class MlmTrainer(Trainer):
         self.scores = []
         self.lr_kb = lr_kb
         self.kb_evaluation = kb_evaluation
-        self.eval_kb_every = eval_kb_every
+        self.eval_every = eval_every
 
         self.tokenizer = tokenizer
-        self.eval_bert_every = eval_bert_every
         self.test_dataset = WikiFb15k237Test()
 
         self.max_step_evaluation = (
             max_step_evaluation if max_step_evaluation is not None else len(self.test_dataset)
         )
 
-        self.metric_bert = stats.RollingMean(window_size=self.eval_kb_every)
-        self.metric_kb = stats.RollingMean(window_size=self.eval_kb_every)
-        self.metric_kb_kl = stats.RollingMean(window_size=self.eval_kb_every)
-        self.metric_bert_kl = stats.RollingMean(window_size=self.eval_kb_every)
+        self.metric_bert = stats.RollingMean(window_size=self.eval_every)
+        self.metric_kb = stats.RollingMean(window_size=self.eval_every)
+        self.metric_kb_kl = stats.RollingMean(window_size=self.eval_every)
+        self.metric_bert_kl = stats.RollingMean(window_size=self.eval_every)
         # Perplexity reset every time we call evaluation of Bert:
         self.metric_perplexity = stats.RollingMean(window_size=self.max_step_evaluation)
 
@@ -346,9 +344,6 @@ class MlmTrainer(Trainer):
                     self.kb_optimizer.step()
                     self.kb_optimizer.zero_grad()
 
-                if self.kb_evaluation is not None:
-                    self.link_prediction_evaluation()
-
                 if (self.step_kb + 1) % self.update_top_k_every == 0:
                     self.distillation.update_kb(kb=self.kb, kb_model=self.kb_model)
 
@@ -369,32 +364,11 @@ class MlmTrainer(Trainer):
 
             # Eval perplexity every 100 steps:
 
-            if self.eval_bert_every is not None:
+            if self.eval_every is not None:
 
-                if (self.call + 1) % self.eval_bert_every == 0:
+                if (self.call + 1) % self.eval_every == 0:
 
-                    bar = tqdm.tqdm(
-                        enumerate(self.test_dataset),
-                        position=0,
-                        desc="Evaluating PPL",
-                        total=self.max_step_evaluation,
-                    )
-
-                    for step_evaluation_bert, sentence in bar:
-
-                        if step_evaluation_bert > self.max_step_evaluation:
-                            break
-
-                        self.metric_perplexity.update(
-                            sentence_perplexity(
-                                model=model,
-                                tokenizer=self.tokenizer,
-                                sentence=sentence,
-                                device=self.args.device,
-                            )
-                        )
-
-                        bar.set_description(f"Evaluating PPL {self.metric_perplexity.get():2f}")
+                    self.evaluation(model=model)
 
             model = model.train()
             inputs.pop("mask")
@@ -480,9 +454,10 @@ class MlmTrainer(Trainer):
         )
         return loss
 
-    def link_prediction_evaluation(self):
+    def evaluation(self, model):
         """Eval KB model."""
-        if (self.step_kb + 1) % self.eval_kb_every == 0:
+
+        if self.fit_kb or self.distillation.do_distill_bert:
 
             scores_valid = self.kb_evaluation.eval(
                 model=self.kb_model,
@@ -497,15 +472,42 @@ class MlmTrainer(Trainer):
             self.print_scores(step=self.step_kb, name="valid", scores=scores_valid)
             self.print_scores(step=self.step_kb, name="test", scores=scores_test)
 
-            if self.path_score_kb is not None:
-                self.export_to_csv(name="valid", score=scores_valid, step=self.step_kb)
-                self.export_to_csv(name="test", score=scores_test, step=self.step_kb)
-
             if self.path_model_kb is not None:
+
                 self.kb_model.cpu().save(
                     os.path.join(self.path_model_kb, f"{self.kb_model.name}_{self.step_kb}")
                 )
+
                 self.kb_model.to(self.args.device)
+
+        if self.fit_bert or self.distillation.do_distill_kg:
+
+            bar = tqdm.tqdm(
+                enumerate(self.test_dataset),
+                position=0,
+                desc="Evaluating PPL",
+                total=self.max_step_evaluation,
+            )
+
+            for step_evaluation_bert, sentence in bar:
+
+                if step_evaluation_bert > self.max_step_evaluation:
+                    break
+
+                self.metric_perplexity.update(
+                    sentence_perplexity(
+                        model=model,
+                        tokenizer=self.tokenizer,
+                        sentence=sentence,
+                        device=self.args.device,
+                    )
+                )
+
+                bar.set_description(f"Evaluating PPL {self.metric_perplexity.get():2f}")
+
+        if self.path_evaluation is not None:
+            self.export_to_csv(name="valid", score=scores_valid, step=self.step_kb)
+            self.export_to_csv(name="test", score=scores_test, step=self.step_kb)
 
         return self
 
@@ -522,7 +524,7 @@ class MlmTrainer(Trainer):
         score["kb_loss"] = self.metric_kb.get()
         score["perplexity"] = self.metric_perplexity.get()
         self.scores.append(pd.DataFrame.from_dict(score, orient="index").T)
-        pd.concat(self.scores, axis="rows").to_csv(self.path_score_kb, index=False)
+        pd.concat(self.scores, axis="rows").to_csv(self.path_evaluation, index=False)
 
     def normalize_loss(self, loss, distillation_loss, bert):
         """Normalize losses."""

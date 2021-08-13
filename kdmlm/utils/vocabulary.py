@@ -1,6 +1,3 @@
-import os
-from audioop import reverse
-
 import torch
 import tqdm
 
@@ -45,7 +42,11 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     >>> len(tokenizer)
     41071
 
-    assert 30522 + len({k: v for k, v in kb.entities.items() if k not in do_not_add_entities}) == 41071
+    >>> for layer in model.parameters():
+    ...    if layer.shape[0] == len(tokenizer):
+    ...        print(True)
+    True
+    True
 
     """
     entities_to_add = {}
@@ -63,10 +64,7 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     tokenizer.save_pretrained(".")
 
     with open("vocab.txt", "a") as file:
-        for i, e in enumerate(entities_to_add):
-            if i >= len(entities_to_add):
-                file.write(f"{e}")
-                continue
+        for e in entities_to_add:
             file.write(f"{e}\n")
 
     tokenizer = tokenizer.from_pretrained(".")
