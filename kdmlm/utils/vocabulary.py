@@ -1,3 +1,6 @@
+import os
+from audioop import reverse
+
 import torch
 import tqdm
 
@@ -47,15 +50,28 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     """
     entities_to_add = {}
 
+    vocabulary = tokenizer.get_vocab()
+
     # Expand bert vocabulary for entities that are not already part of it's vocabulary:
     for e in tqdm.tqdm(entities, position=0, desc="Adding entities to Bert vocabulary."):
         e = e.lower() if lower else e
-        entities_to_add[e] = tokenizer.tokenize(e)
+
+        if e not in vocabulary:
+            entities_to_add[e] = tokenizer.tokenize(e)
 
     # Expand bert vocabulary:
-    tokenizer.add_tokens(list(entities_to_add.keys()))
-    model.resize_token_embeddings(len(tokenizer))
+    tokenizer.save_pretrained(".")
+
+    with open("vocab.txt", "a") as file:
+        for i, e in enumerate(entities_to_add):
+            if i >= len(entities_to_add):
+                file.write(f"{e}")
+                continue
+            file.write(f"{e}\n")
+
+    tokenizer = tokenizer.from_pretrained(".")
     vocabulary = tokenizer.get_vocab()
+    model.resize_token_embeddings(len(tokenizer))
 
     # Initialize smart weights for entities thar are now part of the vocabulary of Bert.
     # The embeddings of Toulouse University will be equal to the mean of the embeddings of
