@@ -457,6 +457,9 @@ class MlmTrainer(Trainer):
     def evaluation(self, model):
         """Eval KB model."""
 
+        scores_valid = {}
+        scores_test = {}
+
         if self.fit_kb or self.distillation.do_distill_bert:
 
             scores_valid = self.kb_evaluation.eval(
