@@ -20,11 +20,13 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     Example
     -------
 
-    >>> from mkb import datasets
+    >>> from mkb import datasets as mkb_datasets
+    >>> from kdmlm import datasets
     >>> from kdmlm import utils
     >>> from transformers import DistilBertTokenizer, DistilBertForMaskedLM
 
-    >>> dataset = datasets.Fb15k237(1, pre_compute=False, num_workers=0)
+    >>> kb = mkb_datasets.Fb15k237(1, pre_compute=False, num_workers=0)
+    >>> do_not_add_entities = datasets.Fb15k237One(1).entities
     >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
     >>> model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
 
@@ -34,11 +36,13 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     >>> model, tokenizer = utils.expand_bert_vocabulary(
     ...    model = model,
     ...    tokenizer = tokenizer,
-    ...    entities = dataset.entities
+    ...    entities = {k: v for k, v in kb.entities.items() if k not in do_not_add_entities}
     ... )
 
     >>> len(tokenizer)
-    43225
+    41071
+
+    assert 30522 + len({k: v for k, v in kb.entities.items() if k not in do_not_add_entities}) == 41071
 
     """
     entities_to_add = {}
@@ -46,9 +50,7 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     # Expand bert vocabulary for entities that are not already part of it's vocabulary:
     for e in tqdm.tqdm(entities, position=0, desc="Adding entities to Bert vocabulary."):
         e = e.lower() if lower else e
-        tokenized_e = tokenizer.tokenize(e)
-        if len(tokenized_e) > 1:
-            entities_to_add[e] = tokenized_e
+        entities_to_add[e] = tokenizer.tokenize(e)
 
     # Expand bert vocabulary:
     tokenizer.add_tokens(list(entities_to_add.keys()))
