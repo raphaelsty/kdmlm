@@ -6,7 +6,7 @@ import torch
 __all__ = ["sentence_perplexity", "perplexity"]
 
 
-def sentence_perplexity(model, tokenizer, sentence):
+def sentence_perplexity(model, tokenizer, sentence, device="cpu"):
     """Computes perplexity.
 
     Example
@@ -29,10 +29,12 @@ def sentence_perplexity(model, tokenizer, sentence):
 
     """
     input_ids = tokenizer.encode(sentence, return_tensors="pt")
-    return perplexity(model=model, input_ids=input_ids, mask_token_id=tokenizer.mask_token_id)
+    return perplexity(
+        model=model, input_ids=input_ids, mask_token_id=tokenizer.mask_token_id, device=device
+    )
 
 
-def perplexity(model, input_ids, mask_token_id):
+def perplexity(model, input_ids, mask_token_id, device="cpu"):
     """
 
     Example
@@ -60,5 +62,5 @@ def perplexity(model, input_ids, mask_token_id):
     masked_input = repeat_input.masked_fill(mask == 1, mask_token_id)
     labels = repeat_input.masked_fill(masked_input != mask_token_id, -100)
     with torch.no_grad():
-        loss = model(input_ids=masked_input, labels=labels).loss.item()
+        loss = model(input_ids=masked_input.to(device), labels=labels.to(device)).loss.item()
     return np.exp(loss)

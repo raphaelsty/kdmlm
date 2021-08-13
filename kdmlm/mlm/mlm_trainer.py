@@ -387,7 +387,10 @@ class MlmTrainer(Trainer):
 
                         self.metric_perplexity.update(
                             sentence_perplexity(
-                                model=model, tokenizer=self.tokenizer, sentence=sentence
+                                model=model,
+                                tokenizer=self.tokenizer,
+                                sentence=sentence,
+                                device=self.args.device,
                             )
                         )
 
