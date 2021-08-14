@@ -63,6 +63,10 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     True
     True
 
+    References
+    ----------
+    1. (tokenizer is slow after adding new tokens #615)[https://github.com/huggingface/tokenizers/issues/615]
+
     """
     entities_to_add = {}
 
