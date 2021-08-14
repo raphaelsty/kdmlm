@@ -33,14 +33,29 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     >>> len(tokenizer)
     30522
 
+    >>> n = 0
+
+    >>> for e in kb.entities:
+    ...     if len(tokenizer.tokenize(e)) == 1:
+    ...         n += 1
+
+    >>> n
+    1838
+
+    >>> entities = {k: v for k, v in kb.entities.items() if k not in do_not_add_entities}
+
     >>> model, tokenizer = utils.expand_bert_vocabulary(
     ...    model = model,
     ...    tokenizer = tokenizer,
-    ...    entities = {k: v for k, v in kb.entities.items() if k not in do_not_add_entities}
+    ...    entities = entities,
     ... )
 
-    >>> len(tokenizer)
-    41071
+    >>> for e in kb.entities:
+    ...     if len(tokenizer.tokenize(e)) == 1:
+    ...         n += 1
+
+    >>> n
+    3676
 
     >>> for layer in model.parameters():
     ...    if layer.shape[0] == len(tokenizer):
@@ -60,14 +75,9 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
         if e not in vocabulary:
             entities_to_add[e] = tokenizer.tokenize(e)
 
-    # Expand bert vocabulary:
-    tokenizer.save_pretrained(".")
-
-    with open("vocab.txt", "a") as file:
-        for e in entities_to_add:
-            file.write(f"{e}\n")
-
-    tokenizer = tokenizer.from_pretrained(".")
+    unique_no_split_tokens = tokenizer.unique_no_split_tokens
+    _ = tokenizer.add_tokens(list(entities_to_add.keys()))
+    tokenizer.unique_no_split_tokens = unique_no_split_tokens
     vocabulary = tokenizer.get_vocab()
     model.resize_token_embeddings(len(tokenizer))
 
