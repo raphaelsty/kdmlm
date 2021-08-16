@@ -36,6 +36,7 @@ class Distillation:
         device="cuda",
         seed=42,
         entities_to_distill=None,
+        average=False,
     ):
         self.do_distill_bert = do_distill_bert
         self.do_distill_kg = do_distill_kg
@@ -55,6 +56,7 @@ class Distillation:
                 subwords_limit=subwords_limit,
                 device=self.device,
                 entities_to_distill=entities_to_distill,
+                average=average,
             )
 
         if self.do_distill_kg:

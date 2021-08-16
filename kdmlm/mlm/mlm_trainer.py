@@ -98,7 +98,7 @@ class MlmTrainer(Trainer):
     ...     do_predict = True,
     ... )
 
-    >>> mlm_trainer = MlmTrainer(
+    >>> mlm_trainer = mlm.MlmTrainer(
     ...    args = training_args,
     ...    model = model,
     ...    train_dataset = train_dataset,
@@ -166,6 +166,7 @@ class MlmTrainer(Trainer):
         temperature=1,
         entities_to_distill=None,
         max_step_evaluation=None,
+        average=False,
     ):
         super().__init__(
             model=model,
@@ -248,6 +249,7 @@ class MlmTrainer(Trainer):
             device=self.args.device,
             temperature=temperature,
             entities_to_distill=entities_to_distill,
+            average=average,
         )
 
         # Store kb evaluation scores
@@ -529,6 +531,7 @@ class MlmTrainer(Trainer):
             device=self.args.device,
             max_tokens=15,
             subwords_limit=1000,
+            average=False,
         )
 
         recall = {f"recall_{k}": stats.Mean() for k in [1, 3, 10, 100]}
