@@ -356,6 +356,12 @@ class MlmTrainer(Trainer):
         if self.call > self.max_step_bert:
             raise EndTrainingException
 
+        if self.eval_every is not None:
+
+            if (self.call + 1) % self.eval_every == 0:
+
+                self.evaluation(model=model)
+
         loss = 0
         distillation_loss = 0
 
@@ -364,13 +370,6 @@ class MlmTrainer(Trainer):
         if self.fit_bert or self.distillation.do_distill_kg:
 
             # Eval perplexity every 100 steps:
-
-            if self.eval_every is not None:
-
-                if (self.call + 1) % self.eval_every == 0:
-
-                    self.evaluation(model=model)
-
             model = model.train()
             inputs.pop("mask")
 
@@ -473,8 +472,8 @@ class MlmTrainer(Trainer):
                 dataset=self.kb.test,
             )
 
-            self.print_scores(step=self.step_kb, name="valid", scores=scores_valid)
-            self.print_scores(step=self.step_kb, name="test", scores=scores_test)
+            self.print_scores(step=self.call, name="valid", scores=scores_valid)
+            self.print_scores(step=self.call, name="test", scores=scores_test)
 
             if self.path_model_kb is not None:
 
