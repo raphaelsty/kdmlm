@@ -4,6 +4,7 @@ import collections
 
 import torch
 import tqdm
+from creme import stats
 
 from ..utils import bert_top_k, distillation_index, mapping_entities
 
@@ -55,6 +56,7 @@ class BertLogits:
     ...     device = "cpu",
     ...     max_tokens = 15,
     ...     subwords_limit = 10,
+    ...     average = True,
     ... )
 
     >>> len(distillation.logits.keys())
@@ -73,7 +75,7 @@ class BertLogits:
     >>> e[4688]
     'Liberia'
 
-    >>> for i in index.tolist()[:4]:
+    >>> for i in index.tolist()[:10]:
     ...     print(e[i])
     Liberia
     Niger
@@ -94,11 +96,13 @@ class BertLogits:
         n,
         device,
         entities_to_distill=None,
+        average=True,
     ):
         self.k = k
         self.n = n
         self.max_tokens = max_tokens
         self.device = device
+        self.average = average
         self.kb_entities, _ = distillation_index(
             tokenizer=tokenizer, entities=entities, subwords_limit=subwords_limit
         )
@@ -182,6 +186,8 @@ class BertLogits:
                     break
 
         dataset.dataset.mlm_probability = mlm_probability
+        if self.average:
+            logits = self.average_logits(logits=logits)
         return logits
 
     def _top_k(self, model, input_ids, attention_mask, labels, entity_ids, **kwargs):
@@ -224,3 +230,32 @@ class BertLogits:
             yield entity.item(), torch.cat([top_k_logits[i], random_k_logits]), torch.cat(
                 [top_k[i], random_k[i]]
             )
+
+    def average_logits(self, logits):
+        """Average logits"""
+        average_logits = {}
+
+        for e, tops in tqdm.tqdm(logits.items(), position=0, desc="Averaging logits."):
+
+            average_tops = collections.defaultdict(lambda: stats.Mean())
+
+            for scores, candidates in tops:
+
+                for c, s in zip(candidates, scores):
+                    average_tops[c.item()].update(s.item())
+
+            average_tops = {key: value.get() for key, value in average_tops.items()}
+
+            average_tops = {
+                k: v
+                for k, v in sorted(average_tops.items(), key=lambda item: item[1], reverse=True)
+            }
+
+            average_logits[e] = [
+                (
+                    torch.tensor(list(average_tops.values())[: self.k]),
+                    torch.tensor(list(average_tops.keys())[: self.k]),
+                )
+            ]
+
+        return average_logits

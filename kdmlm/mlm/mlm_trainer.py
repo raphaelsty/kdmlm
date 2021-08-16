@@ -1,6 +1,5 @@
 import os
 import random
-from lib2to3.pgen2.tokenize import tokenize
 
 import pandas as pd
 import torch
@@ -12,7 +11,7 @@ from mkb import sampling as mkb_sampling
 from torch.utils import data
 from transformers import Trainer
 
-from ..datasets import WikiFb15k237Test
+from ..datasets import WikiFb15k237Recall, WikiFb15k237Test
 from ..distillation import Distillation
 from ..utils import sentence_perplexity
 
@@ -509,12 +508,41 @@ class MlmTrainer(Trainer):
                 bar.set_description(f"Evaluating PPL {self.metric_perplexity.get():2f}")
 
         if self.path_evaluation is not None:
-            self.export_to_csv(name="valid", score=scores_valid, step=self.step_kb)
-            self.export_to_csv(name="test", score=scores_test, step=self.step_kb)
+            self.export_to_csv(model=model, name="valid", score=scores_valid, step=self.call)
+            self.export_to_csv(model=model, name="test", score=scores_test, step=self.call)
 
         return self
 
-    def export_to_csv(self, name, score, step):
+    def bert_recall(self, model):
+        """Evaluate recall of Bert Top k."""
+        distillation_recall = distillation.BertLogits(
+            model=model,
+            dataset=WikiFb15k237Recall(
+                batch_size=self.args.per_device_train_batch_size,
+                tokenizer=self.tokenizer,
+                entities=self.kb.entities,
+            ),
+            tokenizer=self.tokenizer,
+            entities=self.kb.entities,
+            k=100,
+            n=len(self.test_dataset),
+            device=self.args.device,
+            max_tokens=15,
+            subwords_limit=1000,
+        )
+
+        recall = {f"recall_{k}": stats.Mean() for k in [1, 3, 10, 100]}
+        for e, logits in distillation_recall.logits.items():
+            for _, candidates in logits:
+                for k in [1, 3, 10, 100]:
+                    if e in candidates.tolist()[:k]:
+                        recall[f"recall_{k}"].update(1)
+                    else:
+                        recall[f"recall_{k}"].update(0)
+
+        return {key: value.get() for key, value in recall.items()}
+
+    def export_to_csv(self, model, name, score, step):
         """Export scores as a csv file."""
         score["step"] = step
         score["alpha"] = self.alpha
@@ -526,6 +554,11 @@ class MlmTrainer(Trainer):
         score["bert_loss"] = self.metric_bert.get()
         score["kb_loss"] = self.metric_kb.get()
         score["perplexity"] = self.metric_perplexity.get()
+
+        if self.fit_bert or self.distillation.do_distill_kg:
+            for metric, value in self.bert_recall(model).items():
+                score[metric] = value
+
         self.scores.append(pd.DataFrame.from_dict(score, orient="index").T)
         pd.concat(self.scores, axis="rows").to_csv(self.path_evaluation, index=False)
 
