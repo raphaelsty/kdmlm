@@ -84,7 +84,7 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
 
     tokenizer.save_pretrained(".")
 
-    with open("vocab.txt", "a") as tokenizer_vocab:
+    with open("vocab.txt", "a", encoding="utf-8") as tokenizer_vocab:
         for token in entities_to_add:
             tokenizer_vocab.write(f"{token}\n")
 
