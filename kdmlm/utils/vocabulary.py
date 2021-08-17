@@ -50,12 +50,17 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     ...    entities = entities,
     ... )
 
+    >>> len(entities)
+    11040
+
+    >>> n = 0
+
     >>> for e in kb.entities:
     ...     if len(tokenizer.tokenize(e)) == 1:
     ...         n += 1
 
     >>> n
-    3676
+    2868
 
     >>> for layer in model.parameters():
     ...    if layer.shape[0] == len(tokenizer):
@@ -69,19 +74,21 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
 
     """
     entities_to_add = {}
-
     vocabulary = tokenizer.get_vocab()
 
     # Expand bert vocabulary for entities that are not already part of it's vocabulary:
     for e in tqdm.tqdm(entities, position=0, desc="Adding entities to Bert vocabulary."):
         e = e.lower() if lower else e
-
         if e not in vocabulary:
             entities_to_add[e] = tokenizer.tokenize(e)
 
-    unique_no_split_tokens = tokenizer.unique_no_split_tokens
-    _ = tokenizer.add_tokens(list(entities_to_add.keys()))
-    tokenizer.unique_no_split_tokens = unique_no_split_tokens
+    tokenizer.save_pretrained(".")
+
+    with open("vocab.txt", "a") as tokenizer_vocab:
+        for token in entities_to_add:
+            tokenizer_vocab.write(f"{token}\n")
+
+    tokenizer = tokenizer.from_pretrained(".")
     vocabulary = tokenizer.get_vocab()
     model.resize_token_embeddings(len(tokenizer))
 
