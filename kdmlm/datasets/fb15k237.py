@@ -45,6 +45,10 @@ class Fb15k237(mkb_datasets.Dataset):
     >>> len(kb.entities) - (n + len(one_token_entities))
     17
 
+    References
+    ----------
+    1. (tokenizer is slow after adding new tokens #615)[https://github.com/huggingface/tokenizers/issues/615]
+
     """
 
     def __init__(
@@ -59,8 +63,6 @@ class Fb15k237(mkb_datasets.Dataset):
 
         freebase = mkb_datasets.Fb15k237(batch_size=1, pre_compute=False, num_workers=0)
         freebase_one = Fb15k237One(1, pre_compute=False, shuffle=False)
-
-        new_entities = {}
 
         replacements = [
             (" ", ""),
@@ -83,6 +85,7 @@ class Fb15k237(mkb_datasets.Dataset):
             ("*", ""),
         ]
 
+        new_entities = {}
         for e, id in freebase.entities.items():
             if e in freebase_one.entities:
                 new_entities[e] = id
