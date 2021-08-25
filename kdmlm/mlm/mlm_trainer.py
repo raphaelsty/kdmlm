@@ -11,7 +11,12 @@ from mkb import sampling as mkb_sampling
 from torch.utils import data
 from transformers import Trainer
 
-from ..datasets import WikiFb15k237Recall, WikiFb15k237Test
+from ..datasets import (
+    WikiFb15k237OneRecall,
+    WikiFb15k237OneTest,
+    WikiFb15k237Recall,
+    WikiFb15k237Test,
+)
 from ..distillation import Distillation
 from ..utils import sentence_perplexity
 
@@ -123,6 +128,7 @@ class MlmTrainer(Trainer):
     ...    max_step_bert = 10,
     ...    entities_to_distill = [1, 2, 3],
     ...    max_step_evaluation = 10,
+    ...    pytest=True,
     ... )
 
     >>> import kdmlm
@@ -167,6 +173,7 @@ class MlmTrainer(Trainer):
         entities_to_distill=None,
         max_step_evaluation=None,
         average=False,
+        pytest=False,
     ):
         super().__init__(
             model=model,
@@ -261,6 +268,7 @@ class MlmTrainer(Trainer):
 
         self.tokenizer = tokenizer
         self.test_dataset = WikiFb15k237Test()
+        self.test_dataset_one = WikiFb15k237OneTest()  # One token dataset
 
         self.max_step_evaluation = (
             max_step_evaluation if max_step_evaluation is not None else len(self.test_dataset)
@@ -272,6 +280,8 @@ class MlmTrainer(Trainer):
         self.metric_bert_kl = stats.RollingMean(window_size=self.eval_every)
         # Perplexity reset every time we call evaluation of Bert:
         self.metric_perplexity = stats.RollingMean(window_size=self.max_step_evaluation)
+        self.metric_perplexity_one = stats.RollingMean(window_size=self.max_step_evaluation)
+        self.pytest = pytest
 
     @staticmethod
     def print_scores(step, name, scores):
@@ -485,28 +495,33 @@ class MlmTrainer(Trainer):
 
         if self.fit_bert or self.distillation.do_distill_kg:
 
-            bar = tqdm.tqdm(
-                enumerate(self.test_dataset),
-                position=0,
-                desc="Evaluating PPL",
-                total=self.max_step_evaluation,
-            )
+            for test_dataset, metric_ppl, id in [
+                (self.test_dataset, self.metric_perplexity, "oov"),
+                (self.test_dataset_one, self.metric_perplexity_one, "in"),
+            ]:
 
-            for step_evaluation_bert, sentence in bar:
-
-                if step_evaluation_bert > self.max_step_evaluation:
-                    break
-
-                self.metric_perplexity.update(
-                    sentence_perplexity(
-                        model=model,
-                        tokenizer=self.tokenizer,
-                        sentence=sentence,
-                        device=self.args.device,
-                    )
+                bar = tqdm.tqdm(
+                    enumerate(test_dataset),
+                    position=0,
+                    desc="Evaluating PPL",
+                    total=self.max_step_evaluation,
                 )
 
-                bar.set_description(f"Evaluating PPL {self.metric_perplexity.get():2f}")
+                for step_evaluation_bert, sentence in bar:
+
+                    if step_evaluation_bert > self.max_step_evaluation:
+                        break
+
+                    metric_ppl.update(
+                        sentence_perplexity(
+                            model=model,
+                            tokenizer=self.tokenizer,
+                            sentence=sentence,
+                            device=self.args.device,
+                        )
+                    )
+
+                    bar.set_description(f"PPL on {id}: {metric_ppl.get():2f}")
 
         if self.path_evaluation is not None:
             self.export_to_csv(model=model, name="valid", score=scores_valid, step=self.call)
@@ -516,31 +531,40 @@ class MlmTrainer(Trainer):
 
     def bert_recall(self, model):
         """Evaluate recall of Bert Top k."""
-        distillation_recall = distillation.BertLogits(
-            model=model,
-            dataset=WikiFb15k237Recall(
-                batch_size=self.args.per_device_train_batch_size,
+
+        datasets_recall = [(WikiFb15k237Recall, "oov"), (WikiFb15k237OneRecall, "in")]
+
+        recall = {}
+        for _, id in datasets_recall:
+            for k in [1, 2, 3, 10, 100]:
+                recall[f"recall_{id}_{k}"] = stats.Mean()
+
+        for dataset, id in datasets_recall:
+
+            distillation_recall = distillation.BertLogits(
+                model=model,
+                dataset=dataset(
+                    batch_size=self.args.per_device_train_batch_size,
+                    tokenizer=self.tokenizer,
+                    entities=self.kb.entities,
+                ),
                 tokenizer=self.tokenizer,
                 entities=self.kb.entities,
-            ),
-            tokenizer=self.tokenizer,
-            entities=self.kb.entities,
-            k=100,
-            n=len(self.test_dataset),
-            device=self.args.device,
-            max_tokens=15,
-            subwords_limit=1000,
-            average=False,
-        )
+                k=100,
+                n=len(self.test_dataset) if self.pytest is False else 10,
+                device=self.args.device,
+                max_tokens=15,
+                subwords_limit=1000,
+                average=False,
+            )
 
-        recall = {f"recall_{k}": stats.Mean() for k in [1, 3, 10, 100]}
-        for e, logits in distillation_recall.logits.items():
-            for _, candidates in logits:
-                for k in [1, 3, 10, 100]:
-                    if e in candidates.tolist()[:k]:
-                        recall[f"recall_{k}"].update(1)
-                    else:
-                        recall[f"recall_{k}"].update(0)
+            for e, logits in distillation_recall.logits.items():
+                for _, candidates in logits:
+                    for k in [1, 3, 10, 100]:
+                        if e in candidates.tolist()[:k]:
+                            recall[f"recall_{id}_{k}"].update(1)
+                        else:
+                            recall[f"recall_{id}_{k}"].update(0)
 
         return {key: value.get() for key, value in recall.items()}
 
