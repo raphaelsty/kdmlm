@@ -45,6 +45,8 @@ class Fb15k237(mkb_datasets.Dataset):
     >>> len(kb.entities) - (n + len(one_token_entities))
     17
 
+    >>> kb.mapping
+
     References
     ----------
     1. (tokenizer is slow after adding new tokens #615)[https://github.com/huggingface/tokenizers/issues/615]
@@ -108,3 +110,12 @@ class Fb15k237(mkb_datasets.Dataset):
             num_workers=num_workers,
             seed=seed,
         )
+
+    @property
+    def mapping(self):
+        """Mapping between mkb.Fb15k237 entities labels and kdmlm.Fb15k237 entities labels."""
+        freebase_entities = mkb_datasets.Fb15k237(
+            batch_size=1, pre_compute=False, num_workers=0
+        ).entities
+        freebase_entities = {id: label for label, id in freebase_entities.items()}
+        return {freebase_entities[id]: label for label, id in self.entities.items()}

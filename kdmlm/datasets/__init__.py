@@ -15,6 +15,7 @@ from .load_dataset import (
 from .sample import Sample
 from .torch_sample import TorchSample
 from .wiki_fb15k237_test import WikiFb15k237Recall, WikiFb15k237Test
+from .wiki_fb15k237one_test import WikiFb15k237OneRecall, WikiFb15k237OneTest
 
 __all__ = [
     "Collator",
@@ -33,4 +34,6 @@ __all__ = [
     "TorchSample",
     "WikiFb15k237Recall",
     "WikiFb15k237Test",
+    "WikiFb15k237OneRecall",
+    "WikiFb15k237OneTest",
 ]

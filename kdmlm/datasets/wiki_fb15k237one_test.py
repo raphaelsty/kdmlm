@@ -7,32 +7,33 @@ from .collator import Collator
 from .kd_dataset import KDDataset
 from .load_dataset import LoadFromJsonFolder
 
-__all__ = ["WikiFb15k237Recall", "WikiFb15k237Test"]
+__all__ = ["WikiFb15k237OneRecall", "WikiFb15k237OneTest"]
 
 
-class WikiFb15k237Test:
-    """Wikipedia sample to evaluate perplexity.
+class WikiFb15k237OneTest:
+    """Wikipedia sample to evaluate perplexity on sentences that contains entities that are
+    part of the vocabulary of Bert..
 
     Example
     -------
 
     >>> from kdmlm import datasets
-    >>> test_dataset = datasets.WikiFb15k237Test()
+    >>> test_dataset = datasets.WikiFb15k237OneTest()
 
     >>> for sentence in test_dataset:
     ...     break
 
     >>> sentence
-    'Pentti Olavi Niemi (19021962) was a Finnish  Lutheran clergyman and politician. He was born on 9 July 1902 in tampere, and was a member of the Parliament of Finland from 1948 to 1954 and again from 1958 until his death on 7 February 1962, representing the Social Democratic Party of Finland (SDP).'
+    "Doherty joined punk band, Jerry's Kids (band) in 1982, and later moved on to Stranglehold and the ska band The Mighty Mighty Bosstones#Early history."
 
     >>> test_dataset[10]
-    {'sentence': 'Lagunes District () is one of fourteen Districts of Ivory Coast of | ivorycoast |. The district is located in the southern part of the country. The capital of the district is Dabou.', 'entity': 'ivorycoast'}
+    {'sentence': 'Offer excelled at | rowing |, in particular partnering his brother Jack in the Sweep (rowing). They also took part in skiffing, being members of The Skiff Club. They won the Gentlemens Double Sculls at the Skiff Championships Regatta in 1930, 1931, 1932, 1933 and 1935.', 'entity': 'rowing'}
 
     """
 
     def __init__(self):
         with open(
-            pathlib.Path(__file__).parent.joinpath("wiki_fb15k237_test/0.json"),
+            pathlib.Path(__file__).parent.joinpath("wiki_fb15k237one_test/0.json"),
             encoding="utf-8",
         ) as input_file:
             self.dataset = json.load(input_file)
@@ -48,8 +49,9 @@ class WikiFb15k237Test:
         return self.dataset[idx]
 
 
-class WikiFb15k237Recall(data.DataLoader):
-    """Wikipedia sample to evaluate recall.
+class WikiFb15k237OneRecall(data.DataLoader):
+    """Wikipedia sample to evaluate recall on wikipedia sentences that contains entities that are
+    part of the vocabulary of Bert.
 
     Example
     -------
@@ -63,7 +65,7 @@ class WikiFb15k237Recall(data.DataLoader):
 
     >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
 
-    >>> test_dataset = datasets.WikiFb15k237Recall(
+    >>> test_dataset = datasets.WikiFb15k237OneRecall(
     ...     batch_size = 10,
     ...     tokenizer = tokenizer,
     ...     entities = kb.entities
@@ -84,7 +86,7 @@ class WikiFb15k237Recall(data.DataLoader):
         super().__init__(
             dataset=KDDataset(
                 dataset=LoadFromJsonFolder(
-                    folder=pathlib.Path(__file__).parent.joinpath("wiki_fb15k237_test/"),
+                    folder=pathlib.Path(__file__).parent.joinpath("wiki_fb15k237one_test/"),
                     entities=entities,
                     shuffle=False,
                 ),
