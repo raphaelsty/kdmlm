@@ -101,6 +101,7 @@ class MlmTrainer(Trainer):
     ...     save_total_limit = 1,
     ...     do_train = True,
     ...     do_predict = True,
+    ...     learning_rate = 5e-5,
     ... )
 
     >>> mlm_trainer = mlm.MlmTrainer(
@@ -579,7 +580,8 @@ class MlmTrainer(Trainer):
         score["kb_kl"] = self.metric_kb_kl.get()
         score["bert_loss"] = self.metric_bert.get()
         score["kb_loss"] = self.metric_kb.get()
-        score["perplexity"] = self.metric_perplexity.get()
+        score["ppl_in"] = self.metric_perplexity_one.get()
+        score["ppl_oov"] = self.metric_perplexity.get()
 
         if self.fit_bert or self.distillation.do_distill_kg:
             for metric, value in self.bert_recall(model).items():

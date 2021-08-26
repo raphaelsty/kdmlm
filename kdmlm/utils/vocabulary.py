@@ -4,7 +4,7 @@ import tqdm
 __all__ = ["expand_bert_vocabulary"]
 
 
-def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
+def expand_bert_vocabulary(model, tokenizer, entities, id_to_label, lower=True):
     """Expand bert vocabulary by adding entities to bert embeddings. Entities weights are
     initialized by computing the mean of the embeddings of the tokens of the entities. This
     function is made for models which use word piece tokenizer.
@@ -20,13 +20,15 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     Example
     -------
 
-    >>> from mkb import datasets as mkb_datasets
     >>> from kdmlm import datasets
     >>> from kdmlm import utils
-    >>> from transformers import DistilBertTokenizer, DistilBertForMaskedLM
 
-    >>> kb = mkb_datasets.Fb15k237(1, pre_compute=False, num_workers=0)
+    >>> from transformers import DistilBertTokenizer, DistilBertForMaskedLM
+    >>> from transformers import FillMaskPipeline
+
+    >>> kb = datasets.Fb15k237(1, pre_compute=False, num_workers=0)
     >>> do_not_add_entities = datasets.Fb15k237One(1).entities
+
     >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
     >>> model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
 
@@ -40,7 +42,7 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     ...         n += 1
 
     >>> n
-    1838
+    1849
 
     >>> entities = {k: v for k, v in kb.entities.items() if k not in do_not_add_entities}
 
@@ -48,10 +50,11 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     ...    model = model,
     ...    tokenizer = tokenizer,
     ...    entities = entities,
+    ...    id_to_label = kb.id_to_label,
     ... )
 
     >>> len(entities)
-    11040
+    11031
 
     >>> n = 0
 
@@ -60,13 +63,34 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     ...         n += 1
 
     >>> n
-    2868
+    12317
 
     >>> for layer in model.parameters():
     ...    if layer.shape[0] == len(tokenizer):
     ...        print(True)
     True
     True
+
+
+    >>> pipeline = FillMaskPipeline(model = model, tokenizer = tokenizer, framework = "pt")
+    >>> y_pred = pipeline("I have studied at [MASK].", targets=list(entities), top_k=10)
+
+    >>> for i, top in enumerate(y_pred):
+    ...     if i > 10:
+    ...         break
+    ...     else:
+    ...         print(top["sequence"])
+    i have studied at oxford.
+    i have studied at cambridge.
+    i have studied at trinityuniversity.
+    i have studied at berkeley.
+    i have studied at universitycollege.
+    i have studied at columbia.
+    i have studied at harrow.
+    i have studied at lavaluniversity.
+    i have studied at kyotouniversity.
+    i have studied at yalelawschool.
+    i have studied at columbiacollege.
 
     References
     ----------
@@ -80,7 +104,7 @@ def expand_bert_vocabulary(model, tokenizer, entities, lower=True):
     for e in tqdm.tqdm(entities, position=0, desc="Adding entities to Bert vocabulary."):
         e = e.lower() if lower else e
         if e not in vocabulary:
-            entities_to_add[e] = tokenizer.tokenize(e)
+            entities_to_add[e] = tokenizer.tokenize(id_to_label[e])
 
     tokenizer.save_pretrained(".")
 
