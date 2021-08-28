@@ -6,12 +6,15 @@ import torch
 import tqdm
 from creme import stats
 from kdmlm import distillation
+from mkb import evaluation as mkb_evaluation
 from mkb import losses as mkb_losses
+from mkb import models as mkb_models
 from mkb import sampling as mkb_sampling
 from torch.utils import data
 from transformers import Trainer
 
 from ..datasets import (
+    Fb15k237One,
     WikiFb15k237OneRecall,
     WikiFb15k237OneTest,
     WikiFb15k237Recall,
@@ -130,6 +133,7 @@ class MlmTrainer(Trainer):
     ...    entities_to_distill = [1, 2, 3],
     ...    max_step_evaluation = 10,
     ...    pytest=True,
+    ...    eval_on_fb15k237one = True,
     ... )
 
     >>> import kdmlm
@@ -175,6 +179,7 @@ class MlmTrainer(Trainer):
         max_step_evaluation=None,
         average=False,
         pytest=False,
+        eval_on_fb15k237one=False,
     ):
         super().__init__(
             model=model,
@@ -241,6 +246,12 @@ class MlmTrainer(Trainer):
             batch_size=100,
         )
 
+        if eval_on_fb15k237one:
+            entities_to_distill = {
+                self.kb.entities[e]: True
+                for e, _ in Fb15k237One(1, pre_compute=False).entities.items()
+            }
+
         self.distillation = Distillation(
             bert_model=model,
             kb_model=kb_model,
@@ -282,7 +293,9 @@ class MlmTrainer(Trainer):
         # Perplexity reset every time we call evaluation of Bert:
         self.metric_perplexity = stats.RollingMean(window_size=self.max_step_evaluation)
         self.metric_perplexity_one = stats.RollingMean(window_size=self.max_step_evaluation)
+
         self.pytest = pytest
+        self.eval_on_fb15k237one = eval_on_fb15k237one
 
     @staticmethod
     def print_scores(step, name, scores):
@@ -473,15 +486,59 @@ class MlmTrainer(Trainer):
 
         if self.fit_kb or self.distillation.do_distill_bert:
 
+            # Fb15K237 evaluation
+            if self.eval_on_fb15k237one:
+
+                with torch.no_grad():
+
+                    self.kb_model = self.kb_model.cpu()
+
+                    evaluation_kb = Fb15k237One(1, pre_compute=False)
+
+                    evaluation_kb_model = mkb_models.TransE(
+                        hidden_dim=self.kb_model.hidden_dim,
+                        entities=evaluation_kb.entities,
+                        relations=evaluation_kb.relations,
+                        gamma=self.kb_model.gamma,
+                    )
+
+                    for e, id in evaluation_kb.entities.items():
+                        evaluation_kb_model.entity_embedding[id] = (
+                            self.kb_model.entity_embedding[self.kb.entities[e]].detach().clone()
+                        )
+
+                    for r, id in evaluation_kb.relations.items():
+                        evaluation_kb_model.relation_embedding[id] = (
+                            self.kb_model.relation_embedding[self.kb.relations[r]].detach().clone()
+                        )
+
+                self.kb_model = self.kb_model.to(self.args.device)
+                evaluation_kb_model = evaluation_kb_model.to(self.args.device)
+
+                self.kb_evaluation = mkb_evaluation.Evaluation(
+                    true_triples=[],
+                    entities=evaluation_kb.entities,
+                    relations=evaluation_kb.relations,
+                    batch_size=10,
+                    device=self.args.device,
+                )
+
+            else:
+                evaluation_kb = self.kb
+                evaluation_kb_model = self.kb_model
+
             scores_valid = self.kb_evaluation.eval(
-                model=self.kb_model,
-                dataset=self.kb.valid,
+                model=evaluation_kb_model,
+                dataset=evaluation_kb.valid,
             )
 
             scores_test = self.kb_evaluation.eval(
-                model=self.kb_model,
-                dataset=self.kb.test,
+                model=evaluation_kb_model,
+                dataset=evaluation_kb.test,
             )
+
+            scores_valid["one_token"] = self.eval_on_fb15k237one
+            scores_test["one_token"] = self.eval_on_fb15k237one
 
             self.print_scores(step=self.call, name="valid", scores=scores_valid)
             self.print_scores(step=self.call, name="test", scores=scores_test)
