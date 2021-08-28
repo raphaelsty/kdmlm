@@ -51,16 +51,21 @@ class BertLogits:
     ...     dataset = dataset,
     ...     tokenizer = tokenizer,
     ...     entities = kb.entities,
-    ...     k = 4,
+    ...     k = 100,
     ...     n = 1000,
     ...     device = "cpu",
     ...     max_tokens = 15,
     ...     subwords_limit = 10,
-    ...     average = True,
+    ...     average = False,
     ... )
 
     >>> len(distillation.logits.keys())
     51
+
+    >>> for e, tops in distillation.logits.items():
+    ...     for candidates, scores in tops:
+    ...         if scores.shape[0] != 200:
+    ...             print(scores.shape[0], candidates.shape[0])
 
     >>> logits, index = distillation.logits[1197][0]
 
@@ -75,7 +80,7 @@ class BertLogits:
     >>> e[4688]
     'Liberia'
 
-    >>> for i in index.tolist()[:10]:
+    >>> for i in index.tolist()[:4]:
     ...     print(e[i])
     Liberia
     Niger
@@ -98,6 +103,10 @@ class BertLogits:
         entities_to_distill=None,
         average=True,
     ):
+        if average:
+            self.constant_average = 10
+            k *= self.constant_average
+
         self.k = k
         self.n = n
         self.max_tokens = max_tokens
@@ -244,6 +253,11 @@ class BertLogits:
                 for c, s in zip(candidates, scores):
                     average_tops[c.item()].update(s.item())
 
+            # Sometimes random k adds top k entities as part of random entities, it could yield
+            # an error.
+            if not len(average_tops) >= (self.k // self.constant_average) * 2:
+                continue
+
             average_tops = {key: value.get() for key, value in average_tops.items()}
 
             average_tops = {
@@ -253,8 +267,14 @@ class BertLogits:
 
             average_logits[e] = [
                 (
-                    torch.tensor(list(average_tops.values())[: self.k * 2]),
-                    torch.tensor(list(average_tops.keys())[: self.k * 2]),
+                    torch.tensor(
+                        list(average_tops.values())[: self.k // self.constant_average]
+                        + list(average_tops.values())[-self.k // self.constant_average :]
+                    ),
+                    torch.tensor(
+                        list(average_tops.keys())[: self.k // self.constant_average]
+                        + list(average_tops.keys())[-self.k // self.constant_average :]
+                    ),
                 )
             ]
 
