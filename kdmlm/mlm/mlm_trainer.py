@@ -537,7 +537,7 @@ class MlmTrainer(Trainer):
 
         recall = {}
         for _, id in datasets_recall:
-            for k in [1, 2, 3, 10, 100]:
+            for k in [1, 3, 10, 100]:
                 recall[f"recall_{id}_{k}"] = stats.Mean()
 
         for dataset, id in datasets_recall:

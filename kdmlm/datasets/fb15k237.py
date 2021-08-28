@@ -1,3 +1,5 @@
+from hashlib import new
+
 from mkb import datasets as mkb_datasets
 
 from .fb15k237one import Fb15k237One
@@ -16,12 +18,16 @@ class Fb15k237(mkb_datasets.Dataset):
     -------
 
     >>> from kdmlm import datasets
+    >>> from mkb import datasets as mkb_datasets
     >>> from kdmlm import utils
 
     >>> from transformers import DistilBertTokenizer, DistilBertForMaskedLM
 
     >>> kb = datasets.Fb15k237(1, pre_compute=False)
     >>> one_token_entities = datasets.Fb15k237One(1, pre_compute=False).entities
+
+    >>> len(kb.entities) == len(mkb_datasets.Fb15k237(1, pre_compute=False).entities)
+    True
 
     >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
     >>> model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
@@ -30,6 +36,7 @@ class Fb15k237(mkb_datasets.Dataset):
     ...    model = model,
     ...    tokenizer = tokenizer,
     ...    entities = {k: v for k, v in kb.entities.items() if k not in one_token_entities},
+    ...    id_to_label = kb.id_to_label,
     ... )
 
     >>> n = 0
@@ -43,7 +50,7 @@ class Fb15k237(mkb_datasets.Dataset):
 
     Number of entities that are not part of Bert vocabulary, i.e entities with special caracters:
     >>> len(kb.entities) - (n + len(one_token_entities))
-    17
+    26
 
     References
     ----------
@@ -87,12 +94,17 @@ class Fb15k237(mkb_datasets.Dataset):
 
         new_entities = {}
         for e, id in freebase.entities.items():
+
             if e in freebase_one.entities:
+                e = self.avoid_collisions(e=e, entities=new_entities)
                 new_entities[e] = id
+
             else:
                 e = e.lower()
                 for target, replace in replacements:
                     e = e.replace(target, replace)
+
+                e = self.avoid_collisions(e=e, entities=new_entities)
                 new_entities[e] = id
 
         super().__init__(
@@ -126,3 +138,11 @@ class Fb15k237(mkb_datasets.Dataset):
         ).entities
         freebase_entities = {id: label for label, id in freebase_entities.items()}
         return {label: freebase_entities[id] for label, id in self.entities.items()}
+
+    @staticmethod
+    def avoid_collisions(e, entities):
+        distinct_id = 1
+        while e in entities:
+            e += f"_{distinct_id}"
+            distinct_id += 1
+        return e
