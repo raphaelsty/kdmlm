@@ -96,7 +96,7 @@ class KbLogits:
 
         if entities_to_distill is not None:
             self.filter_entities = {
-                e.item(): True for e in kb_entities if e in entities_to_distill
+                e.item(): True for e in kb_entities if e.item() in entities_to_distill
             }
         else:
             self.filter_entities = {e.item(): True for e in kb_entities}
