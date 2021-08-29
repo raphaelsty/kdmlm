@@ -14,6 +14,7 @@ from torch.utils import data
 from transformers import Trainer
 
 from ..datasets import (
+    Fb15k237,
     Fb15k237One,
     WikiFb15k237OneRecall,
     WikiFb15k237OneTest,
@@ -125,7 +126,7 @@ class MlmTrainer(Trainer):
     ...    seed = 42,
     ...    fit_bert = True,
     ...    fit_kb = True,
-    ...    do_distill_kg = True,
+    ...    do_distill_kg = False,
     ...    do_distill_bert = True,
     ...    path_evaluation = 'evaluation.csv',
     ...    norm_loss = False,
@@ -246,10 +247,21 @@ class MlmTrainer(Trainer):
             batch_size=100,
         )
 
-        if eval_on_fb15k237one:
+        # TODO Add this logic inside distillation module.
+        if eval_on_fb15k237one and do_distill_bert and not do_distill_kg:
+
             entities_to_distill = {
                 self.kb.entities[e]: True
                 for e, _ in Fb15k237One(1, pre_compute=False).entities.items()
+            }
+        elif eval_on_fb15k237one and do_distill_kg and not do_distill_bert:
+
+            fb_one_entities = Fb15k237One(1, pre_compute=False).entities
+
+            entities_to_distill = {
+                self.kb.entities[e]: True
+                for e, _ in Fb15k237(1, pre_compute=False).entities.items()
+                if e not in fb_one_entities
             }
 
         self.distillation = Distillation(
