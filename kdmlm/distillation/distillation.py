@@ -255,7 +255,8 @@ class Distillation:
 
             mask_labels = labels != -100
             logits = logits[mask_labels]
-            logits = torch.index_select(logits, 1, self.bert_entities)
+            # self.kb_entities or self.bert_entities, original self.bert_entities
+            logits = torch.index_select(logits, 1, self.kb_entities)
 
             for p_e_c, e in zip(logits, entities):
 
