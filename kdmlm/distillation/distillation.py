@@ -82,6 +82,7 @@ class Distillation:
         )
 
         self.bert_entities = self.bert_entities.to(self.device)
+        self.kb_entities = self.kb_entities.to(self.device)
 
         random.seed(seed)
 
