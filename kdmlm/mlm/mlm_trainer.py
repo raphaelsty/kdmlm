@@ -158,6 +158,7 @@ class MlmTrainer(Trainer):
         kb_evaluation=None,
         eval_every=None,
         alpha=0.3,
+        alpha_kb=0.3,
         n=1000,
         top_k_size=100,
         update_top_k_every=1000,
@@ -173,6 +174,7 @@ class MlmTrainer(Trainer):
         path_model_kb=None,
         lr_kb=0.00005,
         norm_loss=False,
+        norm_loss_kb=False,
         ewm_alpha=0.9997,
         max_step_bert=10 ** 10,
         temperature=1,
@@ -191,10 +193,11 @@ class MlmTrainer(Trainer):
 
         self.subwords_limit = subwords_limit
         self.norm_loss = norm_loss
+        self.norm_loss_kb = norm_loss_kb
         self.max_step_bert = max_step_bert
         self.call = 0
 
-        if self.norm_loss:
+        if self.norm_loss or self.norm_loss_kb:
 
             self.ewm = {
                 "link_prediction": stats.EWMean(alpha=ewm_alpha),
@@ -204,6 +207,7 @@ class MlmTrainer(Trainer):
             }
 
         self.alpha = alpha
+        self.alpha_kb = alpha_kb
 
         self.kb_model = kb_model.to(self.args.device)
 
@@ -361,7 +365,7 @@ class MlmTrainer(Trainer):
 
                 if self.distillation.do_distill_bert and self.fit_kb:
 
-                    if self.norm_loss:
+                    if self.norm_loss_kb:
 
                         loss = self.normalize_loss(
                             loss=loss, distillation_loss=distillation_loss, bert=False
@@ -369,7 +373,7 @@ class MlmTrainer(Trainer):
 
                     else:
 
-                        loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
+                        loss = (1 - self.alpha_kb) * loss + self.alpha_kb * distillation_loss
 
                 elif self.distillation.do_distill_bert and not self.fit_kb:
 
@@ -662,6 +666,8 @@ class MlmTrainer(Trainer):
     def normalize_loss(self, loss, distillation_loss, bert):
         """Normalize losses."""
 
+        alpha_norm = self.alpha if bert else self.alpha_kb
+
         if distillation_loss == 0:
             return loss
 
@@ -672,7 +678,7 @@ class MlmTrainer(Trainer):
             self.ewm["link_prediction"].update(loss.detach().item())
             self.ewm["distill_link_prediction"].update(distillation_loss.detach().item())
 
-        weight = 1 / (1 + self.alpha)
+        weight = 1 / (1 + alpha_norm)
 
         try:
             if bert:
@@ -684,4 +690,4 @@ class MlmTrainer(Trainer):
         except ZeroDivisionError:
             return loss
 
-        return weight * (loss + self.alpha * scale * distillation_loss)
+        return weight * (loss + alpha_norm * scale * distillation_loss)
