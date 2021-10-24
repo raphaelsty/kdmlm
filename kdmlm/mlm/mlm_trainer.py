@@ -22,7 +22,7 @@ from ..datasets import (
     WikiFb15k237Test,
 )
 from ..distillation import Distillation
-from ..utils import sentence_perplexity
+from ..utils import entity_perplexity, sentence_perplexity
 
 __all__ = ["MlmTrainer"]
 
@@ -309,6 +309,8 @@ class MlmTrainer(Trainer):
         # Perplexity reset every time we call evaluation of Bert:
         self.metric_perplexity = stats.RollingMean(window_size=self.max_step_evaluation)
         self.metric_perplexity_one = stats.RollingMean(window_size=self.max_step_evaluation)
+        self.metric_perplexity_entity = stats.RollingMean(window_size=self.max_step_evaluation)
+        self.metric_perplexity_one_entity = stats.RollingMean(window_size=self.max_step_evaluation)
 
         self.pytest = pytest
         self.eval_on_fb15k237one = eval_on_fb15k237one
@@ -604,24 +606,36 @@ class MlmTrainer(Trainer):
         return self
 
     def bert_recall(self, model):
-        """Evaluate recall of Bert Top k."""
+        """Evaluate recall of Bert Top k and also perplexity over entities."""
 
-        datasets_recall = [(WikiFb15k237Recall, "oov"), (WikiFb15k237OneRecall, "in")]
+        datasets_recall = [
+            (WikiFb15k237Recall, self.metric_perplexity_entity, "oov"),
+            (WikiFb15k237OneRecall, self.metric_perplexity_one_entity, "in"),
+        ]
 
         recall = {}
-        for _, id in datasets_recall:
+        for _, __, id in datasets_recall:
             for k in [1, 3, 10, 100]:
                 recall[f"recall_{id}_{k}"] = stats.Mean()
 
-        for dataset, id in datasets_recall:
+        for dataset, metric, id in datasets_recall:
+
+            dataset = dataset(
+                batch_size=self.args.per_device_train_batch_size,
+                tokenizer=self.tokenizer,
+                entities=self.kb.entities,
+            )
+
+            metric.update(
+                entity_perplexity(dataset=dataset),
+                model=model,
+                device=self.args.device,
+                max_step_evaluation=self.max_step_evaluation,
+            )
 
             distillation_recall = distillation.BertLogits(
                 model=model,
-                dataset=dataset(
-                    batch_size=self.args.per_device_train_batch_size,
-                    tokenizer=self.tokenizer,
-                    entities=self.kb.entities,
-                ),
+                dataset=dataset,
                 tokenizer=self.tokenizer,
                 entities=self.kb.entities,
                 k=100,
@@ -640,7 +654,14 @@ class MlmTrainer(Trainer):
                         else:
                             recall[f"recall_{id}_{k}"].update(0)
 
-        return {key: value.get() for key, value in recall.items()}
+        recall = {key: value.get() for key, value in recall.items()}
+        recall.update(
+            {
+                "ppl_oov_entity": self.metric_perplexity_entity.get(),
+                "ppl_in_entity": self.metric_perplexity_entity.get(),
+            }
+        )
+        return recall
 
     def export_to_csv(self, model, name, score, step):
         """Export scores as a csv file."""

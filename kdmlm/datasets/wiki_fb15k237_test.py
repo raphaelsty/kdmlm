@@ -1,6 +1,7 @@
 import json
 import pathlib
 
+from river import stats
 from torch.utils import data
 
 from .collator import Collator
@@ -55,21 +56,20 @@ class WikiFb15k237Recall(data.DataLoader):
     -------
 
     >>> from kdmlm import datasets
-    >>> from torch.utils import data
-    >>> from transformers import DistilBertTokenizer
     >>> from mkb import datasets as mkb_datasets
+    >>> from transformers import DistilBertTokenizer
 
     >>> kb = mkb_datasets.Fb15k237(1, pre_compute=False)
 
     >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
 
-    >>> test_dataset = datasets.WikiFb15k237Recall(
+    >>> dataset = datasets.WikiFb15k237Recall(
     ...     batch_size = 10,
     ...     tokenizer = tokenizer,
     ...     entities = kb.entities
     ... )
 
-    >>> for sample in test_dataset:
+    >>> for sample in dataset:
     ...     break
 
     >>> sample.keys()
@@ -77,6 +77,9 @@ class WikiFb15k237Recall(data.DataLoader):
 
     >>> sample["input_ids"].shape[0]
     10
+
+    >>> tokenizer.decode(sample["input_ids"][0])
+    '[CLS] panguraptor ( " pangu [ a chinese god ] plunderer " ) is a genus of coelophysidae theropod [MASK] known from fossils discovered in lower jurassic rocks of southern china. the type species and only known species is " panguraptor lufengensis ". [SEP] [PAD] [PAD] [PAD] [PAD]'
 
     """
 
