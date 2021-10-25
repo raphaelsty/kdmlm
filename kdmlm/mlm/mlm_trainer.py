@@ -627,10 +627,12 @@ class MlmTrainer(Trainer):
             )
 
             metric.update(
-                entity_perplexity(dataset=dataset),
-                model=model,
-                device=self.args.device,
-                max_step_evaluation=self.max_step_evaluation,
+                entity_perplexity(
+                    model=model,
+                    dataset=dataset,
+                    device=self.args.device,
+                    max_step_evaluation=self.max_step_evaluation,
+                )
             )
 
             distillation_recall = distillation.BertLogits(
