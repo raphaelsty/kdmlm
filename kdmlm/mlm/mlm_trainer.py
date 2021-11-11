@@ -5,6 +5,7 @@ import pandas as pd
 import torch
 import tqdm
 from creme import stats
+from entitype import downstream_datasets
 from kdmlm import distillation
 from mkb import evaluation as mkb_evaluation
 from mkb import losses as mkb_losses
@@ -315,6 +316,8 @@ class MlmTrainer(Trainer):
         self.pytest = pytest
         self.eval_on_fb15k237one = eval_on_fb15k237one
 
+        self.scores_lama = None
+
     @staticmethod
     def print_scores(step, name, scores):
         print("\n")
@@ -599,6 +602,24 @@ class MlmTrainer(Trainer):
 
                     bar.set_description(f"PPL on {id}: {metric_ppl.get():2f}")
 
+            lama = downstream_datasets.Lama(
+                batch_size=25,
+                tokenizer=self.tokenizer,
+                device=self.args.device,
+            )
+
+            self.scores_lama = lama.eval(
+                model=model,
+                entities={
+                    key.lower(): value.lower() for key, value in self.kb.label_to_id.items()
+                },
+                id_to_label={
+                    key.lower(): value.lower() for key, value in self.kb.id_to_label.items()
+                },
+            )
+
+            self.scores_lama = {f"lama_{key}": value for key, value in self.scores_lama.items()}
+
         if self.path_evaluation is not None:
             self.export_to_csv(model=model, name="valid", score=scores_valid, step=self.call)
             self.export_to_csv(model=model, name="test", score=scores_test, step=self.call)
@@ -678,6 +699,7 @@ class MlmTrainer(Trainer):
         score["kb_loss"] = self.metric_kb.get()
         score["ppl_in"] = self.metric_perplexity_one.get()
         score["ppl_oov"] = self.metric_perplexity.get()
+        score.update(self.scores_lama)
 
         if self.fit_bert or self.distillation.do_distill_kg:
             for metric, value in self.bert_recall(model).items():
