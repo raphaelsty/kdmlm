@@ -699,9 +699,12 @@ class MlmTrainer(Trainer):
         score["kb_loss"] = self.metric_kb.get()
         score["ppl_in"] = self.metric_perplexity_one.get()
         score["ppl_oov"] = self.metric_perplexity.get()
-        score.update(self.scores_lama)
 
         if self.fit_bert or self.distillation.do_distill_kg:
+
+            for metric, value in self.scores_lama:
+                score[metric] = value
+
             for metric, value in self.bert_recall(model).items():
                 score[metric] = value
 
