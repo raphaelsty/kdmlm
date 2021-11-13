@@ -702,7 +702,7 @@ class MlmTrainer(Trainer):
 
         if self.fit_bert or self.distillation.do_distill_kg:
 
-            for metric, value in self.scores_lama:
+            for metric, value in self.scores_lama.items():
                 score[metric] = value
 
             for metric, value in self.bert_recall(model).items():
