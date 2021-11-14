@@ -212,7 +212,7 @@ class BertLogits:
             tokens=self.tokens,
             order=self.order,
             max_tokens=self.max_tokens,
-            k=len(self.kb_entities) if self.average else self.k,
+            k=min(4000, len(self.kb_entities)) if self.average else self.k,
             device=self.device,
         )
 
