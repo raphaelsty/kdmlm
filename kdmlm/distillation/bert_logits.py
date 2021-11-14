@@ -252,8 +252,8 @@ class BertLogits:
 
             average_logits[e] = [
                 (
-                    torch.tensor(list(average_tops.values())[: self.k * 2]),
-                    torch.tensor(list(average_tops.keys())[: self.k * 2]),
+                    torch.tensor(list(average_tops.values())[: self.k * 2]).to(self.device),
+                    torch.tensor(list(average_tops.keys())[: self.k * 2]).to(self.device),
                 )
             ]
 
