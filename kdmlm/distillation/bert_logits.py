@@ -52,28 +52,17 @@ class BertLogits:
     ...     tokenizer = tokenizer,
     ...     entities = kb.entities,
     ...     k = 100,
-    ...     n = 1000,
+    ...     n = 10000,
     ...     device = "cpu",
     ...     max_tokens = 15,
     ...     subwords_limit = 10,
-    ...     average = False,
+    ...     average = True,
     ... )
 
-    >>> len(distillation.logits.keys())
-    51
-
-    >>> for e, tops in distillation.logits.items():
-    ...     for candidates, scores in tops:
-    ...         if scores.shape[0] != 200:
-    ...             print(scores.shape[0], candidates.shape[0])
+    >>> for key, value in distillation.logits.items():
+    ...     assert len(value) == 1
 
     >>> logits, index = distillation.logits[1197][0]
-
-    >>> torch.round(logits).tolist()[:4]
-    [10., 10.,  9.,  9.]
-
-    >>> index.tolist()[:4]
-    [4688, 4497, 3411, 591]
 
     >>> e = {v: k for k, v in kb.entities.items()}
 
@@ -101,11 +90,8 @@ class BertLogits:
         n,
         device,
         entities_to_distill=None,
-        average=True,
+        average=False,
     ):
-        if average:
-            self.constant_average = 10
-            k *= self.constant_average
 
         self.k = k
         self.n = n
@@ -195,8 +181,10 @@ class BertLogits:
                     break
 
         dataset.dataset.mlm_probability = mlm_probability
+
         if self.average:
-            logits = self.average_logits(logits=logits)
+            logits = self.average_logits(logits)
+
         return logits
 
     def _top_k(self, model, input_ids, attention_mask, labels, entity_ids, **kwargs):
@@ -224,7 +212,7 @@ class BertLogits:
             tokens=self.tokens,
             order=self.order,
             max_tokens=self.max_tokens,
-            k=self.k,
+            k=len(self.kb_entities) if self.average else self.k,
             device=self.device,
         )
 
@@ -235,6 +223,9 @@ class BertLogits:
         for i, entity in enumerate(entity_ids):
 
             random_k_logits = torch.index_select(logits[i], 0, random_k[i])
+
+            if self.average:
+                yield entity.item(), top_k_logits[i], top_k[i]
 
             yield entity.item(), torch.cat([top_k_logits[i], random_k_logits]), torch.cat(
                 [top_k[i], random_k[i]]
@@ -253,13 +244,7 @@ class BertLogits:
                 for c, s in zip(candidates, scores):
                     average_tops[c.item()].update(s.item())
 
-            # Sometimes random k adds top k entities as part of random entities, it could yield
-            # an error.
-            if not len(average_tops) >= (self.k // self.constant_average) * 2:
-                continue
-
             average_tops = {key: value.get() for key, value in average_tops.items()}
-
             average_tops = {
                 k: v
                 for k, v in sorted(average_tops.items(), key=lambda item: item[1], reverse=True)
@@ -267,14 +252,8 @@ class BertLogits:
 
             average_logits[e] = [
                 (
-                    torch.tensor(
-                        list(average_tops.values())[: self.k // self.constant_average]
-                        + list(average_tops.values())[-self.k // self.constant_average :]
-                    ),
-                    torch.tensor(
-                        list(average_tops.keys())[: self.k // self.constant_average]
-                        + list(average_tops.keys())[-self.k // self.constant_average :]
-                    ),
+                    torch.tensor(list(average_tops.values())[: self.k]),
+                    torch.tensor(list(average_tops.keys())[: self.k]),
                 )
             ]
 
