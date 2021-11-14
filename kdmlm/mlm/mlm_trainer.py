@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 import tqdm
 from creme import stats
-from entitype import downstream_datasets
+from entitype import datasets as downstream_datasets
 from kdmlm import distillation
 from mkb import evaluation as mkb_evaluation
 from mkb import losses as mkb_losses
