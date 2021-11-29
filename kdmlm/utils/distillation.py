@@ -266,7 +266,7 @@ def bert_top_k(logits, tokens, order, max_tokens, k, device="cuda"):
     ...     )
     ...     logits = outputs.logits[sample["labels"] != -100]
 
-    >>> scores, candidates = utils.bert_top_k(
+    >>> top_scores, scores, candidates = utils.bert_top_k(
     ...     logits=logits, tokens=tokens, order=order, max_tokens=15, k=10, device = 'cpu')
 
     >>> e = {value: key for key, value in kb.entities.items()}
@@ -277,7 +277,7 @@ def bert_top_k(logits, tokens, order, max_tokens, k, device="cuda"):
     >>> e[sample["entity_ids"][0].item()]
     'Zachary Taylor'
 
-    >>> for s, c in zip(scores[0], candidates[0]):
+    >>> for s, c in zip(top_scores[0], candidates[0]):
     ...     print(f"{e[c.item()]}: {s:2f}")
     John Abraham: 6.836697
     Richard Benjamin: 6.816121
@@ -303,6 +303,6 @@ def bert_top_k(logits, tokens, order, max_tokens, k, device="cuda"):
         scores.append(p_e_c)
 
     scores = torch.cat(scores, dim=-1)
-    scores, indices = torch.topk(scores, k)
+    top_scores, indices = torch.topk(scores, k)
     candidates = torch.stack([torch.index_select(order, 0, idx) for idx in indices])
-    return scores, candidates
+    return top_scores, scores, candidates

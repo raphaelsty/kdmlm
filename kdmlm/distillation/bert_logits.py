@@ -56,11 +56,8 @@ class BertLogits:
     ...     device = "cpu",
     ...     max_tokens = 15,
     ...     subwords_limit = 10,
-    ...     average = True,
+    ...     average = False,
     ... )
-
-    >>> for key, value in distillation.logits.items():
-    ...     assert len(value) == 1
 
     >>> logits, index = distillation.logits[1197][0]
 
@@ -138,6 +135,11 @@ class BertLogits:
 
         logits = collections.defaultdict(list)
 
+        # Compute means of distributions
+        if self.average:
+            average_logits = {}
+            frequency = collections.defaultdict(int)
+
         bar = tqdm.tqdm(
             range(min(self.n // dataset.batch_size, len(dataset))),
             desc=f"Updating Bert logits, {n_distributions} distributions, {len(logits)} entities.",
@@ -162,28 +164,78 @@ class BertLogits:
                     ):
                         continue
 
-                    for (entity, l, index) in self._top_k(model=model, **sample):
-
-                        if entity in self.filter_entities:
-
+                    # Wether or not to compute average distributions:
+                    if self.average:
+                        for entity, logit in self._compute_logits(model=model, **sample):
+                            # Filter entities
+                            if entity not in self.filter_entities:
+                                continue
+                            if entity in average_logits:
+                                average_logits[entity] += logit
+                            else:
+                                average_logits[entity] = logit
+                            n_distributions += 1
+                            frequency[entity] += 1
+                    else:
+                        for entity, l, index in self._top_k(model=model, **sample):
+                            # Filter entities
+                            if entity not in self.filter_entities:
+                                continue
                             logits[entity].append((l, index))
                             n_distributions += 1
 
                     bar.update(1)
+                    n_logits = len(logits)
+                    bar.set_description(
+                        f"Updating Bert logits, {n_distributions} distributions, {n_logits} entities."
+                    )
 
-                n_logits = len(logits)
-
-                bar.set_description(
-                    f"Updating Bert logits, {n_distributions} distributions, {n_logits} entities."
-                )
-
-                if n_distributions >= self.n:
-                    break
+                    if n_distributions >= self.n:
+                        break
 
         dataset.dataset.mlm_probability = mlm_probability
-
         if self.average:
-            logits = self.average_logits(logits)
+            logits = self._logits_from_average(average_logits=average_logits, frequency=frequency)
+        return logits
+
+    def _compute_logits(self, model, input_ids, attention_mask, labels, entity_ids, **kwargs):
+        outputs = model(
+            input_ids.to(self.device),
+            attention_mask=attention_mask.to(self.device),
+        )
+        logits = outputs.logits[labels != -100]
+        for i, entity in enumerate(entity_ids):
+            yield entity.item(), logits[i]
+
+    def _logits_from_average(self, average_logits: dict, frequency: dict):
+
+        logits = collections.defaultdict(list)
+
+        for entity, logit in average_logits.items():
+
+            logit = (logit / frequency[entity]).unsqueeze(0)
+
+            top_k_logits, logit, top_k = bert_top_k(
+                logits=logit,
+                tokens=self.tokens,
+                order=self.order,
+                max_tokens=self.max_tokens,
+                k=self.k,
+                device=self.device,
+            )
+
+            random_k = torch.randint(
+                low=0, high=len(self.kb_entities) - 1, size=(logit.shape[0], self.k)
+            ).to(self.device)
+
+            random_k_logits = torch.index_select(logit[0], 0, random_k[0])
+
+            logits[entity].append(
+                (
+                    torch.cat([top_k_logits[0], random_k_logits]),
+                    torch.cat([top_k[0], random_k[0]]),
+                )
+            )
 
         return logits
 
@@ -207,12 +259,12 @@ class BertLogits:
 
         logits = outputs.logits[labels != -100]
 
-        top_k_logits, top_k = bert_top_k(
+        top_k_logits, logits, top_k = bert_top_k(
             logits=logits,
             tokens=self.tokens,
             order=self.order,
             max_tokens=self.max_tokens,
-            k=min(4000, len(self.kb_entities)) if self.average else self.k,
+            k=self.k,
             device=self.device,
         )
 
@@ -221,40 +273,8 @@ class BertLogits:
         ).to(self.device)
 
         for i, entity in enumerate(entity_ids):
-
             random_k_logits = torch.index_select(logits[i], 0, random_k[i])
-
-            if self.average:
-                yield entity.item(), top_k_logits[i], top_k[i]
 
             yield entity.item(), torch.cat([top_k_logits[i], random_k_logits]), torch.cat(
                 [top_k[i], random_k[i]]
             )
-
-    def average_logits(self, logits):
-        """Average logits"""
-        average_logits = {}
-
-        for e, tops in tqdm.tqdm(logits.items(), position=0, desc="Averaging logits."):
-
-            average_tops = collections.defaultdict(lambda: stats.Mean())
-
-            for scores, candidates in tops:
-
-                for c, s in zip(candidates, scores):
-                    average_tops[c.item()].update(s.item())
-
-            average_tops = {key: value.get() for key, value in average_tops.items()}
-            average_tops = {
-                k: v
-                for k, v in sorted(average_tops.items(), key=lambda item: item[1], reverse=True)
-            }
-
-            average_logits[e] = [
-                (
-                    torch.tensor(list(average_tops.values())[: self.k * 2]).to(self.device),
-                    torch.tensor(list(average_tops.keys())[: self.k * 2]).to(self.device),
-                )
-            ]
-
-        return average_logits
