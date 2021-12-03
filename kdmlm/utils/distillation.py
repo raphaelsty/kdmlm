@@ -1,4 +1,5 @@
 import collections
+from cmath import isinf
 
 import torch
 
@@ -49,6 +50,10 @@ def distillation_index(tokenizer, entities, subwords_limit):
 
     entities_to_bert = {}
     for e, id_e in entities.items():
+
+        if isinstance(e, int) and isinstance(id_e, str):
+            id_e, e = e, id_e
+
         e = tokenizer.encode(e, add_special_tokens=False)
         if len(e) <= subwords_limit and len(e) > 0:
             entities_to_bert[id_e] = tokenizer.decode([e[0]])
@@ -132,9 +137,12 @@ def index(tokenizer, entities, window_size=2):
     """
     index = []
 
-    for key, _ in entities.items():
+    for e, id_e in entities.items():
 
-        ids = tokenizer.encode(key, add_special_tokens=False)[:window_size]
+        if isinstance(e, int) and isinstance(id_e, str):
+            id_e, e = e, id_e
+
+        ids = tokenizer.encode(e, add_special_tokens=False)[:window_size]
 
         # [unused0]
         if len(ids) < window_size:
@@ -195,11 +203,14 @@ def mapping_entities(tokenizer, max_tokens, entities):
     tokens = collections.defaultdict(lambda: collections.defaultdict(list))
     indexes = collections.defaultdict(list)
 
-    for key, value in entities.items():
+    for e, id_e in entities.items():
 
-        token = tokenizer.encode(key, add_special_tokens=False)
+        if isinstance(e, int) and isinstance(id_e, str):
+            id_e, e = e, id_e
+
+        token = tokenizer.encode(e, add_special_tokens=False)
         n_tokens = min(len(token), max_tokens)
-        indexes[n_tokens].append(value)
+        indexes[n_tokens].append(id_e)
 
         for i, token_id in enumerate(token):
             if i >= max_tokens:

@@ -48,10 +48,9 @@ class MlmTrainer(Trainer):
     Examples
     --------
 
-    >>> from kdmlm import mlm
     >>> from kdmlm import datasets
+    >>> from kdmlm import mlm
 
-    >>> from mkb import datasets as mkb_datasets
     >>> from mkb import models as mkb_models
     >>> from mkb import evaluation
 
@@ -70,7 +69,7 @@ class MlmTrainer(Trainer):
     >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
     >>> model = BertForMaskedLM.from_pretrained('bert-base-uncased')
 
-    >>> kb = mkb_datasets.Fb15k237(10, pre_compute = False, num_workers=0)
+    >>> kb = datasets.Fb15k237(10, pre_compute = False, num_workers=0)
     >>> kb.test = kb.test[:2]
     >>> kb.test = kb.test[:1]
 
@@ -92,6 +91,7 @@ class MlmTrainer(Trainer):
     >>> train_dataset = datasets.KDDataset(
     ...     dataset=datasets.Sample(),
     ...     tokenizer=tokenizer,
+    ...     mentions = kb.ids_to_labels,
     ...     sep='|',
     ...     mlm_probability = 0,
     ...     n_masks = 1,
@@ -100,13 +100,11 @@ class MlmTrainer(Trainer):
     >>> training_args = TrainingArguments(
     ...     output_dir = f'./checkpoints',
     ...     overwrite_output_dir = True,
-    ...     num_train_epochs = 2,
-    ...     per_device_train_batch_size = 10,
+    ...     num_train_epochs = 10,
+    ...     per_device_train_batch_size = 20,
     ...     save_steps = 500,
     ...     save_total_limit = 1,
-    ...     do_train = True,
-    ...     do_predict = True,
-    ...     learning_rate = 5e-5,
+    ...     learning_rate = 5e-8,
     ... )
 
     >>> mlm_trainer = mlm.MlmTrainer(
@@ -127,7 +125,7 @@ class MlmTrainer(Trainer):
     ...    seed = 42,
     ...    fit_bert = True,
     ...    fit_kb = True,
-    ...    do_distill_kg = False,
+    ...    do_distill_kg = True,
     ...    do_distill_bert = True,
     ...    path_evaluation = 'evaluation.csv',
     ...    norm_loss = False,
@@ -135,15 +133,12 @@ class MlmTrainer(Trainer):
     ...    entities_to_distill = [1, 2, 3],
     ...    max_step_evaluation = 10,
     ...    pytest=True,
-    ...    eval_on_fb15k237one = True,
+    ...    eval_on_fb15k237one = False,
+    ...    average = True,
     ... )
 
-    >>> import kdmlm
+    >>> mlm_trainer.train()
 
-    >>> try:
-    ...     mlm_trainer.train()
-    ... except kdmlm.mlm.mlm_trainer.EndTrainingException:
-    ...     pass
 
     """
 
@@ -275,7 +270,7 @@ class MlmTrainer(Trainer):
             kb=kb,
             dataset=self.dataset_logits,
             tokenizer=tokenizer,
-            entities=kb.entities,
+            ids_to_labels=kb.ids_to_labels,
             k=top_k_size,
             n=n,
             do_distill_bert=do_distill_bert,
@@ -316,7 +311,7 @@ class MlmTrainer(Trainer):
         self.pytest = pytest
         self.eval_on_fb15k237one = eval_on_fb15k237one
 
-        self.scores_lama = None
+        self.scores_lama = {}
 
     @staticmethod
     def print_scores(step, name, scores):
@@ -602,23 +597,26 @@ class MlmTrainer(Trainer):
 
                     bar.set_description(f"PPL on {id}: {metric_ppl.get():2f}")
 
-            lama = downstream_datasets.Lama(
-                batch_size=25,
-                tokenizer=self.tokenizer,
-                device=self.args.device,
-            )
+            if not self.pytest:
 
-            self.scores_lama = lama.eval(
-                model=model,
-                entities={
-                    key.lower(): value.lower() for key, value in self.kb.label_to_id.items()
-                },
-                id_to_label={
-                    key.lower(): value.lower() for key, value in self.kb.id_to_label.items()
-                },
-            )
+                lama = downstream_datasets.Lama(
+                    batch_size=25,
+                    tokenizer=self.tokenizer,
+                    device=self.args.device,
+                )
 
-            self.scores_lama = {f"lama_{key}": value for key, value in self.scores_lama.items()}
+                self.scores_lama = lama.eval(
+                    model=model,
+                    entities={e.lower(): None for e in self.kb.entities},
+                    id_to_label={
+                        token.lower(): mention.lower()
+                        for token, mention in self.kb.original_mentions.items()
+                    },
+                )
+
+                self.scores_lama = {
+                    f"lama_{key}": value for key, value in self.scores_lama.items()
+                }
 
         if self.path_evaluation is not None:
             self.export_to_csv(model=model, name="valid", score=scores_valid, step=self.call)
@@ -644,7 +642,6 @@ class MlmTrainer(Trainer):
             dataset = dataset(
                 batch_size=self.args.per_device_train_batch_size,
                 tokenizer=self.tokenizer,
-                entities=self.kb.entities,
             )
 
             metric.update(
@@ -660,9 +657,9 @@ class MlmTrainer(Trainer):
                 model=model,
                 dataset=dataset,
                 tokenizer=self.tokenizer,
-                entities=self.kb.entities,
+                entities=self.kb.ids_to_labels,
                 k=100,
-                n=len(self.test_dataset) if self.pytest is False else 10,
+                n=len(self.test_dataset) if self.pytest is False else 100,
                 device=self.args.device,
                 max_tokens=15,
                 subwords_limit=1000,

@@ -4,6 +4,7 @@ import pathlib
 from torch.utils import data
 
 from .collator import Collator
+from .fb15k237 import Fb15k237
 from .kd_dataset import KDDataset
 from .load_dataset import LoadFromJsonFolder
 
@@ -24,14 +25,16 @@ class WikiFb15k237OneTest:
     ...     break
 
     >>> sentence
-    "Doherty joined punk band, Jerry's Kids (band) in 1982, and later moved on to Stranglehold and the ska band The Mighty Mighty Bosstones#Early history."
+    'Bijan Allipour (born 27 March 1949, Masjed Soleyman, iran ) is an iranian business executive and upstream oil and gas expert. He is an advisor to the Oil ministry (Bijan Namdar Zangeneh) in development projects.'
 
     >>> test_dataset[10]
-    {'sentence': 'Offer excelled at | rowing |, in particular partnering his brother Jack in the Sweep (rowing). They also took part in skiffing, being members of The Skiff Club. They won the Gentlemens Double Sculls at the Skiff Championships Regatta in 1930, 1931, 1932, 1933 and 1935.', 'entity': 'rowing'}
+    {'sentence': 'Victor Denton War Memorial is a heritage-listed memorial at Nobby Cemetery, Nobby, queensland, | queensland |, Australia. It was made in 1915 by Bruce Brothers. It was added to the queensland Heritage Register on 21 October 1992.', 'entity': 'queensland'}
 
     """
 
     def __init__(self):
+        self.mentions = Fb15k237(1, pre_compute=False).mentions
+
         with open(
             pathlib.Path(__file__).parent.joinpath("wiki_fb15k237one_test/0.json"),
             encoding="utf-8",
@@ -43,10 +46,29 @@ class WikiFb15k237OneTest:
 
     def __iter__(self):
         for document in self.dataset:
-            yield document["sentence"].replace(" |", "")
+            sentence = document["sentence"]
+            try:
+                for i, entity in enumerate(sentence.split("|")):
+                    if (i + 1) % 2 == 0:
+                        entity = entity.strip()
+                        sentence = sentence.replace(entity, self.mentions[entity])
+            except:
+                pass
+            yield sentence.replace(" |", "")
 
     def __getitem__(self, idx):
-        return self.dataset[idx]
+        document = self.dataset[idx]
+        try:
+            for i, entity in enumerate(document["sentence"].split("|")):
+                if (i + 1) % 2 == 0:
+                    entity = entity.strip()
+                    document["sentence"] = document["sentence"].replace(
+                        entity, self.mentions[entity]
+                    )
+                    document["entity"] = self.mentions[entity]
+        except:
+            pass
+        return document
 
 
 class WikiFb15k237OneRecall(data.DataLoader):
@@ -68,7 +90,6 @@ class WikiFb15k237OneRecall(data.DataLoader):
     >>> test_dataset = datasets.WikiFb15k237OneRecall(
     ...     batch_size = 10,
     ...     tokenizer = tokenizer,
-    ...     entities = kb.entities
     ... )
 
     >>> for sample in test_dataset:
@@ -77,19 +98,20 @@ class WikiFb15k237OneRecall(data.DataLoader):
     >>> sample.keys()
     dict_keys(['input_ids', 'labels', 'mask', 'entity_ids', 'attention_mask'])
 
-    >>> sample["input_ids"].shape[0]
-    10
-
     """
 
-    def __init__(self, batch_size, tokenizer, entities, n_masks=1):
+    def __init__(self, batch_size, tokenizer, n_masks=1):
+
+        kb = Fb15k237(1, pre_compute=False)
+
         super().__init__(
             dataset=KDDataset(
                 dataset=LoadFromJsonFolder(
                     folder=pathlib.Path(__file__).parent.joinpath("wiki_fb15k237one_test/"),
-                    entities=entities,
+                    entities=kb.entities,
                     shuffle=False,
                 ),
+                mentions=kb.ids_to_labels,
                 tokenizer=tokenizer,
                 sep="|",
                 n_masks=n_masks,

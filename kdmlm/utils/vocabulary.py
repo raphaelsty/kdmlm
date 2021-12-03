@@ -4,7 +4,7 @@ import tqdm
 __all__ = ["expand_bert_vocabulary"]
 
 
-def expand_bert_vocabulary(model, tokenizer, entities, id_to_label, lower=True):
+def expand_bert_vocabulary(model, tokenizer, entities, original_entities):
     """Expand bert vocabulary by adding entities to bert embeddings. Entities weights are
     initialized by computing the mean of the embeddings of the tokens of the entities. This
     function is made for models which use word piece tokenizer.
@@ -15,6 +15,7 @@ def expand_bert_vocabulary(model, tokenizer, entities, id_to_label, lower=True):
         model: Bert like model.
         tokenizer: Tokenizer for bert like model.
         entities: Dict or list of entities to add into the vocabulary of Bert.
+        original_entity: Mapping between entities ids and original entities labels.
         lower: Do wether or not uncase entities.
 
     Example
@@ -27,70 +28,80 @@ def expand_bert_vocabulary(model, tokenizer, entities, id_to_label, lower=True):
     >>> from transformers import FillMaskPipeline
 
     >>> kb = datasets.Fb15k237(1, pre_compute=False, num_workers=0)
-    >>> do_not_add_entities = datasets.Fb15k237One(1).entities
 
     >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
     >>> model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
 
-    >>> len(tokenizer)
-    30522
-
-    >>> n = 0
-
-    >>> for e in kb.entities:
-    ...     if len(tokenizer.tokenize(e)) == 1:
-    ...         n += 1
-
-    >>> n
-    1849
-
-    >>> entities = {k: v for k, v in kb.entities.items() if k not in do_not_add_entities}
-
-    >>> model, tokenizer = utils.expand_bert_vocabulary(
-    ...    model = model,
-    ...    tokenizer = tokenizer,
-    ...    entities = entities,
-    ...    id_to_label = kb.id_to_label,
-    ... )
-
-    >>> len(entities)
-    11031
-
-    >>> n = 0
-
-    >>> for e in kb.entities:
-    ...     if len(tokenizer.tokenize(e)) == 1:
-    ...         n += 1
-
-    >>> n
-    12317
-
-    >>> for layer in model.parameters():
-    ...    if layer.shape[0] == len(tokenizer):
-    ...        print(True)
-    True
-    True
-
-
     >>> pipeline = FillMaskPipeline(model = model, tokenizer = tokenizer, framework = "pt")
-    >>> y_pred = pipeline("I have studied at [MASK].", targets=list(entities), top_k=10)
+    >>> y_pred = pipeline(
+    ...    "I have studied at [MASK].",
+    ...    targets = [x for x in list(kb.mentions.values()) if len(tokenizer.tokenize(x)) == 1],
+    ...    top_k = 10
+    ... )
 
     >>> for i, top in enumerate(y_pred):
     ...     if i > 10:
     ...         break
     ...     else:
     ...         print(top["sequence"])
+    i have studied at harvard.
+    i have studied at yale.
     i have studied at oxford.
+    i have studied at ucla.
+    i have studied at mit.
+    i have studied at nyu.
+    i have studied at princeton.
+    i have studied at university.
+    i have studied at stanford.
     i have studied at cambridge.
-    i have studied at trinityuniversity.
-    i have studied at berkeley.
-    i have studied at universitycollege.
-    i have studied at columbia.
-    i have studied at harrow.
-    i have studied at lavaluniversity.
-    i have studied at kyotouniversity.
-    i have studied at yalelawschool.
-    i have studied at columbiacollege.
+
+    >>> len(tokenizer)
+    30522
+
+    >>> n = 0
+    >>> for e in kb.mentions.values():
+    ...     if len(tokenizer.tokenize(e)) == 1:
+    ...         n += 1
+
+    >>> n
+    6342
+
+    >>> len(kb.mentions.values())
+    14541
+
+    >>> model, tokenizer = utils.expand_bert_vocabulary(
+    ...    model = model,
+    ...    tokenizer = tokenizer,
+    ...    entities = kb.mentions.values(),
+    ...    original_entities = kb.original_mentions,
+    ... )
+
+    >>> n = 0
+    >>> for e in kb.mentions.values():
+    ...     if len(tokenizer.tokenize(e)) == 1:
+    ...         n += 1
+
+    >>> n
+    14535
+
+    >>> pipeline = FillMaskPipeline(model = model, tokenizer = tokenizer, framework = "pt")
+    >>> y_pred = pipeline("I have studied at [MASK].", targets=list(kb.mentions.values()), top_k=10)
+
+    >>> for i, top in enumerate(y_pred):
+    ...     if i > 10:
+    ...         break
+    ...     else:
+    ...         print(top["sequence"])
+    i have studied at harvard.
+    i have studied at yale.
+    i have studied at oxford.
+    i have studied at ucla.
+    i have studied at mit.
+    i have studied at nyu.
+    i have studied at princeton.
+    i have studied at university.
+    i have studied at stanford.
+    i have studied at cambridge.
 
     References
     ----------
@@ -102,9 +113,8 @@ def expand_bert_vocabulary(model, tokenizer, entities, id_to_label, lower=True):
 
     # Expand bert vocabulary for entities that are not already part of it's vocabulary:
     for e in tqdm.tqdm(entities, position=0, desc="Adding entities to Bert vocabulary."):
-        e = e.lower() if lower else e
-        if e not in vocabulary:
-            entities_to_add[e] = tokenizer.tokenize(id_to_label[e])
+        if len(tokenizer.tokenize(e)) > 1:
+            entities_to_add[e] = tokenizer.tokenize(original_entities[e])
 
     tokenizer.save_pretrained(".")
 

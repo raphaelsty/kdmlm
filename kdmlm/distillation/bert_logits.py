@@ -4,7 +4,6 @@ import collections
 
 import torch
 import tqdm
-from creme import stats
 
 from ..utils import bert_top_k, distillation_index, mapping_entities
 
@@ -26,7 +25,6 @@ class BertLogits:
 
     >>> from kdmlm import datasets
     >>> from kdmlm import distillation
-    >>> from mkb import datasets as kb
 
     >>> from transformers import DistilBertTokenizer
     >>> from transformers import DistilBertForMaskedLM
@@ -44,19 +42,19 @@ class BertLogits:
     ...     batch_size = 6,
     ... )
 
-    >>> kb = kb.Fb15k237(1, pre_compute=False)
+    >>> kb = datasets.Fb15k237(1, pre_compute=False)
 
     >>> distillation = distillation.BertLogits(
     ...     model = model,
     ...     dataset = dataset,
     ...     tokenizer = tokenizer,
-    ...     entities = kb.entities,
+    ...     entities = kb.ids_to_labels,
     ...     k = 100,
     ...     n = 10000,
     ...     device = "cpu",
     ...     max_tokens = 15,
     ...     subwords_limit = 10,
-    ...     average = False,
+    ...     average = True,
     ... )
 
     >>> logits, index = distillation.logits[1197][0]
@@ -66,11 +64,12 @@ class BertLogits:
     >>> e[4688]
     'Liberia'
 
-    >>> for i in index.tolist()[:4]:
+    >>> for i in index.tolist()[:5]:
     ...     print(e[i])
     Liberia
     Niger
     Sudan
+    South Sudan
     Nigeria
 
     """
@@ -208,7 +207,7 @@ class BertLogits:
             yield entity.item(), logits[i]
 
     def _logits_from_average(self, average_logits: dict, frequency: dict):
-
+        """Retrieve logits distribution, i.e index, scores from average of logits."""
         logits = collections.defaultdict(list)
 
         for entity, logit in average_logits.items():

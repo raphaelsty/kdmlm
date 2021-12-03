@@ -24,7 +24,11 @@ class KbLogits:
     >>> from kdmlm import distillation
 
     >>> from mkb import models
-    >>> from mkb import datasets
+    >>> from kdmlm import datasets
+    >>> import pickle
+
+    >>> with open("./data/TransE_76299", "rb") as input_model:
+    ...     model = pickle.load(input_model)
 
     >>> from transformers import DistilBertTokenizer
 
@@ -32,13 +36,6 @@ class KbLogits:
     >>> _ = torch.manual_seed(42)
 
     >>> dataset = datasets.Fb15k237(30, pre_compute=False, num_workers=0, shuffle=False)
-
-    >>> model = models.TransE(
-    ...    entities = dataset.entities,
-    ...    relations = dataset.relations,
-    ...    hidden_dim = 10,
-    ...    gamma = 5,
-    ... )
 
     >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
 
@@ -48,25 +45,26 @@ class KbLogits:
     ...     entities = dataset.entities,
     ...     tokenizer = tokenizer,
     ...     subwords_limit = 1,
-    ...     k = 1,
-    ...     n = 1000,
-    ...     device = 'cpu'
-    ... )
-
-    >>> len(kb_logits.logits.keys())
-    122
-
-    >>> kb_logits = distillation.KbLogits(
-    ...     dataset = dataset,
-    ...     model = model,
-    ...     entities = dataset.entities,
-    ...     tokenizer = tokenizer,
-    ...     subwords_limit = 1,
-    ...     k = 2,
+    ...     k = 10,
     ...     n = 100,
-    ...     device = 'cpu'
+    ...     device = 'cpu',
+    ...     average = True
     ... )
 
+    >>> for distribution in kb_logits.logits.values():
+    ...     assert len(distribution) == 1
+
+    >>> logits = {}
+    >>> for e, distributions in kb_logits.logits.items():
+    ...     logits[model.entities[e]] = ([model.entities[x.item()] for x in distributions[0][0]])
+
+    >>> for e in logits["harpsichord"][:5]:
+    ...     print(e)
+    violin
+    cello
+    guitar
+    piano
+    viola
 
     """
 
@@ -81,10 +79,12 @@ class KbLogits:
         n,
         device,
         entities_to_distill=None,
+        average=False,
     ):
         self.k = k
         self.n = n
         self.device = device
+        self.average = average
         self.n_entities = len(entities)
 
         kb_entities, _ = distillation_index(
@@ -110,6 +110,10 @@ class KbLogits:
 
         logits = collections.defaultdict(list)
 
+        if self.average:
+            average_logits = {}
+            frequency = collections.defaultdict(int)
+
         n_distributions = 0
 
         bar = tqdm.tqdm(
@@ -130,37 +134,80 @@ class KbLogits:
 
                     if h in self.filter_entities:
 
-                        score, index = self._top_k(
-                            model=model,
-                            h=h,
-                            r=r,
-                            t=t,
-                            tensor_distillation=self.heads,
-                            mode="head-batch",
-                        )
+                        if self.average:
 
-                        logits[h].append((score, index))
+                            score = self._scores(
+                                model=model,
+                                h=h,
+                                r=r,
+                                t=t,
+                                tensor_distillation=self.heads,
+                                mode="head-batch",
+                            )
+
+                            if h in logits:
+                                average_logits[h] += score
+                            else:
+                                average_logits[h] = score
+
+                            frequency[h] += 1
+
+                        else:
+
+                            score, index = self._top_k(
+                                model=model,
+                                h=h,
+                                r=r,
+                                t=t,
+                                tensor_distillation=self.heads,
+                                mode="head-batch",
+                            )
+
+                            logits[h].append((score, index))
 
                         n_distributions += 1
 
                     if t in self.filter_entities:
 
-                        score, index = self._top_k(
-                            model=model,
-                            h=h,
-                            r=r,
-                            t=t,
-                            tensor_distillation=self.tails,
-                            mode="tail-batch",
-                        )
+                        if self.average:
 
-                        logits[t].append((score, index))
+                            score = self._scores(
+                                model=model,
+                                h=h,
+                                r=r,
+                                t=t,
+                                tensor_distillation=self.tails,
+                                mode="tail-batch",
+                            )
+
+                            if t in logits:
+                                average_logits[t] += score
+                            else:
+                                average_logits[t] = score
+
+                            frequency[t] += 1
+
+                        else:
+
+                            score, index = self._top_k(
+                                model=model,
+                                h=h,
+                                r=r,
+                                t=t,
+                                tensor_distillation=self.tails,
+                                mode="tail-batch",
+                            )
+
+                            logits[t].append((score, index))
 
                         n_distributions += 1
 
                 bar.set_description(
                     f"Updating kb logits, {n_distributions} distributions, {len(logits)} entities."
                 )
+
+        if self.average:
+            logits = self._logits_from_average(average_logits=average_logits, frequency=frequency)
 
         return logits
 
@@ -204,7 +251,8 @@ class KbLogits:
         ...     subwords_limit = 2,
         ...     k = 2,
         ...     n = 10,
-        ...     device = 'cpu'
+        ...     device = 'cpu',
+        ...     average = False
         ... )
 
         >>> sample = torch.tensor([
@@ -266,3 +314,46 @@ class KbLogits:
         ).to(self.device)
 
         return score, index
+
+    def _scores(self, model, h, r, t, tensor_distillation, mode):
+        """Scores for average top k."""
+        tensor_distillation[:, 1] = r
+
+        if mode == "head-batch":
+            tensor_distillation[:, 2] = t
+
+        elif mode == "tail-batch":
+            tensor_distillation[:, 0] = h
+
+        return model(tensor_distillation.to(self.device)).flatten()
+
+    def _logits_from_average(self, average_logits, frequency):
+        """Compute logits i.e index and scores from average logits."""
+        logits = collections.defaultdict(list)
+
+        kb_entities = self.heads[:, 0]
+
+        for e, score in average_logits.items():
+
+            score /= frequency[e]
+
+            # Concatenate top k index and random k index
+            index = torch.cat(
+                [
+                    torch.argsort(score, dim=0, descending=True)[: self.k],
+                    torch.randint(low=0, high=len(score) - 1, size=(self.k,)).to(self.device),
+                ]
+            )
+
+            score = torch.index_select(score, 0, index)
+
+            # Retrieve entities from top k index.
+            index = torch.index_select(
+                kb_entities,
+                0,
+                index,
+            ).to(self.device)
+
+            logits[e].append((index, score))
+
+        return logits

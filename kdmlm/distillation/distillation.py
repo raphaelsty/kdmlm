@@ -25,7 +25,7 @@ class Distillation:
         kb,
         dataset,
         tokenizer,
-        entities,
+        ids_to_labels,
         k,
         n,
         temperature=1,
@@ -49,7 +49,7 @@ class Distillation:
                 model=bert_model,
                 dataset=dataset,
                 tokenizer=tokenizer,
-                entities=entities,
+                entities=ids_to_labels,
                 k=k,
                 n=n,
                 max_tokens=max_tokens,
@@ -71,17 +71,18 @@ class Distillation:
                 device=self.device,
                 subwords_limit=subwords_limit,
                 entities_to_distill=entities_to_distill,
+                average=average,
             )
 
         self.heads, self.tails = get_tensor_distillation([_ for _ in range(k * 2)])
 
-        self.bert_entities, self.kb_entities = distillation_index(
+        # Map bert logits to kb logits
+        _, self.kb_entities = distillation_index(
             tokenizer=tokenizer,
-            entities=entities,
+            entities=ids_to_labels,
             subwords_limit=subwords_limit,
         )
 
-        self.bert_entities = self.bert_entities.to(self.device)
         self.kb_entities = self.kb_entities.to(self.device)
 
         random.seed(seed)
@@ -110,8 +111,6 @@ class Distillation:
 
         >>> from kdmlm import datasets
         >>> from kdmlm import distillation
-
-        >>> from mkb import datasets as mkb_datasets
         >>> from mkb import models as mkb_models
 
         >>> from transformers import DistilBertTokenizer
@@ -132,7 +131,7 @@ class Distillation:
         ...     batch_size = 6,
         ... )
 
-        >>> kb = mkb_datasets.Fb15k237(2, pre_compute=False, num_workers=0)
+        >>> kb = datasets.Fb15k237(2, pre_compute=False, num_workers=0)
 
         >>> kb_model = mkb_models.TransE(
         ...     hidden_dim = 10,
@@ -147,7 +146,7 @@ class Distillation:
         ...     kb = kb,
         ...     dataset = dataset,
         ...     tokenizer = tokenizer,
-        ...     entities = kb.entities,
+        ...     ids_to_labels = kb.ids_to_labels,
         ...     k = 3,
         ...     n = 10,
         ...     max_tokens = 1,
@@ -181,7 +180,7 @@ class Distillation:
         ...     for c in candidates.tolist()[:3]:
         ...         print(entities[c])
         Ohio University
-        Ohio State Buckeyes football
+         Ohio
         Ohio
 
         >>> sample = torch.tensor([
@@ -245,7 +244,84 @@ class Distillation:
         return loss
 
     def distill_transe(self, entities, logits, labels):
-        """Distill Transe to Bert."""
+        """Distill Transe to Bert.
+
+        >>> from kdmlm import distillation
+        >>> from torch.utils import data
+
+        >>> import torch
+        >>> _ = torch.manual_seed(42)
+
+        >>> from kdmlm import datasets
+        >>> from kdmlm import distillation
+        >>> from mkb import models as mkb_models
+
+        >>> from transformers import DistilBertTokenizer
+        >>> from transformers import DistilBertForMaskedLM
+
+        >>> device = 'cpu'
+
+        >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+        >>> bert_model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
+
+        >>> dataset = data.DataLoader(
+        ...    dataset = datasets.KDDataset(
+        ...        dataset = datasets.Sample(),
+        ...        tokenizer = tokenizer,
+        ...        sep = '|',
+        ...     ),
+        ...     collate_fn = datasets.Collator(tokenizer=tokenizer),
+        ...     batch_size = 6,
+        ... )
+
+        >>> kb = datasets.Fb15k237(2, pre_compute=False, num_workers=0)
+
+        >>> kb_model = mkb_models.TransE(
+        ...     hidden_dim = 10,
+        ...     gamma = 6,
+        ...     entities = kb.entities,
+        ...     relations = kb.relations,
+        ... )
+
+        >>> distillation = distillation.Distillation(
+        ...     bert_model = bert_model,
+        ...     kb_model = kb_model,
+        ...     kb = kb,
+        ...     dataset = dataset,
+        ...     tokenizer = tokenizer,
+        ...     ids_to_labels = kb.ids_to_labels,
+        ...     k = 3,
+        ...     n = 10,
+        ...     max_tokens = 1,
+        ...     subwords_limit = 1000,
+        ...     device = device,
+        ...     temperature = 10,
+        ... )
+
+        >>> entities_transe = list(distillation.kb_logits.logits.keys())
+
+        >>> sample = {
+        ...    "input_ids": torch.tensor([
+        ...        [101, 5253, 11462, 2209, 1999, 2195, 5691, 102],
+        ...        [101, 26445, 16917, 2003, 1037, 3185, 102, 0]
+        ...    ]),
+        ...    "labels": torch.tensor([
+        ...         [-100, entities_transe[0], -100, -100, -100, -100, -100, -100],
+        ...         [-100, entities_transe[1], -100, -100, -100, -100, -100, -100]
+        ...     ])
+        ... }
+
+        >>> logits = bert_model(**sample).logits
+
+        >>> loss = distillation.distill_transe(
+        ...     entities = torch.tensor([entities_transe[0], entities_transe[1]]),
+        ...     logits = logits,
+        ...     labels = sample["labels"],
+        ... )
+
+        >>> assert loss.item() > 0
+
+        """
         student_score, teacher_score = [], []
 
         # If not all samples have a label:

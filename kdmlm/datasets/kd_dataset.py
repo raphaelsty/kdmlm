@@ -23,25 +23,30 @@ class KDDataset(Dataset):
     --------
 
     >>> import pathlib
-
     >>> from pprint import pprint
 
-    >>> from kdmlm import datasets
-    >>> from mkb import datasets as mkb_datasets
-
+    >>> from kdmlm import datasets, utils
     >>> from torch.utils.data import DataLoader
+    >>> from transformers import DistilBertTokenizer, DistilBertForMaskedLM
+
+    >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+    >>> model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
+    >>> kb = datasets.Fb15k237(1, pre_compute=False)
+
+    >>> model, tokenizer = utils.expand_bert_vocabulary(
+    ...    model = model,
+    ...    tokenizer = tokenizer,
+    ...    entities = kb.mentions.values(),
+    ...    original_entities = kb.original_mentions,
+    ... )
 
     >>> folder = pathlib.Path(__file__).parent.joinpath('./../datasets/sentences')
 
-    >>> from transformers import BertTokenizer
-    >>> tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-
-    >>> entities = mkb_datasets.Fb15k237(1, pre_compute=False).entities
-
     >>> dataset = datasets.KDDataset(
-    ...     dataset=datasets.LoadFromFolder(folder=folder, entities=entities, tokenizer=tokenizer),
+    ...     dataset=datasets.LoadFromFolder(folder=folder, entities=kb.entities, tokenizer=tokenizer),
     ...     tokenizer=tokenizer,
-    ...     sep='|'
+    ...     sep='|',
+    ...     mentions = kb.mentions,
     ... )
 
     >>> data_loader = DataLoader(
@@ -72,7 +77,16 @@ class KDDataset(Dataset):
     tensor([[11839],
             [11190]])
 
-    >>> entities = {value: key for key, value in entities.items()}
+    >>> x["labels"][x['labels'] != -100]
+    tensor([31944, 14349])
+
+    >>> tokenizer.decode([31944])
+    'zacharytaylor'
+
+    >>> tokenizer.decode([14349])
+    'buchanan'
+
+    >>> entities = {value: key for key, value in  kb.entities.items()}
 
     >>> entities[11839]
     'Zachary Taylor'
@@ -85,48 +99,21 @@ class KDDataset(Dataset):
 
     >>> tokenizer.decode([2508])
     'james'
-
-    >>> entities = datasets.Fb15k237One(1, pre_compute=False).entities
-
-    >>> folder = pathlib.Path(__file__).parent.joinpath('./../datasets/wiki_fb15k237one')
-
-    >>> dataset = datasets.KDDataset(
-    ...     dataset=datasets.LoadFromJsonFolder(folder=folder, entities=entities),
-    ...     tokenizer=tokenizer,
-    ...     sep='|'
-    ... )
-
-    >>> data_loader = DataLoader(
-    ...    dataset,
-    ...    batch_size=2,
-    ...    collate_fn=datasets.Collator(tokenizer=tokenizer),
-    ... )
-
-    >>> for x in data_loader:
-    ...    break
-
-    >>> assert x['input_ids'][0].shape[0] == x['input_ids'][1].shape[0]
-    >>> assert x['mask'][0].shape[0] == x['mask'][1].shape[0]
-    >>> assert x['labels'][0].shape[0] == x['labels'][1].shape[0]
-    >>> assert x['attention_mask'][0].shape[0] == x['attention_mask'][1].shape[0]
-
-    >>> assert x['input_ids'][0].shape[0] ==  x['mask'][0].shape[0]
-    >>> assert x['labels'][0].shape[0] == x['mask'][0].shape[0]
-    >>> assert x['mask'][0].shape[0] == x['attention_mask'][0].shape[0]
-
-    >>> tokenizer.decode(x['input_ids'][0])
-    '[CLS] kenya hockey union the kenya hockey union ( khu ) is the sports governing body of field hockey in [MASK]. its headquarters are in nairobi. it is affiliated to ihf international hockey federation and ahf african hockey federation. [SEP] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]'
-
-    >>> tokenizer.decode(x['input_ids'][1])
-    "[CLS] denis yartsev denis nikolayevich yartsev ( ; born 18 september 1990 ) is a russian [MASK] ka. he competed at the 2016 summer olympics in the judo at the 2016 summer olympics men's 73 kg event, in which he was eliminated by lasha shavdatuashvili in the repechage. [SEP]"
-
     """
 
     def __init__(
-        self, dataset, tokenizer, n_masks=1, sep="|", mlm_probability=0, masking_probability=1
+        self,
+        dataset,
+        tokenizer,
+        mentions=None,
+        n_masks=1,
+        sep="|",
+        mlm_probability=0,
+        masking_probability=1,
     ):
         self.dataset = dataset
         self.tokenizer = tokenizer
+        self.mentions = mentions
         self.sep = sep
         self.n_masks = n_masks
         self.collator = Collator(tokenizer=tokenizer)
@@ -135,6 +122,17 @@ class KDDataset(Dataset):
 
     def __getitem__(self, idx):
         sentence, entity_id = self.dataset[idx]
+
+        if self.mentions is not None:
+
+            # Replace entities by their most common mention.
+            try:
+                for i, entity in enumerate(sentence.split(self.sep)):
+                    if (i + 1) % 2 == 0:
+                        entity = entity.strip()
+                        sentence = sentence.replace(entity, self.mentions[entity])
+            except:
+                pass
 
         if self.mlm_probability < random.uniform(0, 1):
 

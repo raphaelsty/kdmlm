@@ -1,10 +1,11 @@
 import json
 import pathlib
+from xml.dom.minidom import Document
 
-from river import stats
 from torch.utils import data
 
 from .collator import Collator
+from .fb15k237 import Fb15k237
 from .kd_dataset import KDDataset
 from .load_dataset import LoadFromJsonFolder
 
@@ -18,20 +19,23 @@ class WikiFb15k237Test:
     -------
 
     >>> from kdmlm import datasets
+    >>> from pprint import pprint as prit
     >>> test_dataset = datasets.WikiFb15k237Test()
 
     >>> for sentence in test_dataset:
-    ...     break
+    ...     pass
 
-    >>> sentence
-    'Pentti Olavi Niemi (19021962) was a Finnish  Lutheran clergyman and politician. He was born on 9 July 1902 in tampere, and was a member of the Parliament of Finland from 1948 to 1954 and again from 1958 until his death on 7 February 1962, representing the Social Democratic Party of Finland (SDP).'
+    >>> print(sentence)
+    Jean Vaquette was a French Olympic weightlifting. He competed in the Weightlifting at the 1920  Men's 67.5 kg at the 1920.
 
     >>> test_dataset[10]
-    {'sentence': 'Lagunes District () is one of fourteen Districts of Ivory Coast of | ivorycoast |. The district is located in the southern part of the country. The capital of the district is Dabou.', 'entity': 'ivorycoast'}
+    {'sentence': 'Smithfield House is a heritage-listed villa at 8 Panda Street, Harristown, queensland, Toowoomba , Toowoomba Region, | queensland |, Australia. It was designed by architectural firm James Marks and Son and built from onwards. It was added to the queensland Heritage Register on 21 October 1992.', 'entity': 'queensland'}
 
     """
 
     def __init__(self):
+        self.mentions = Fb15k237(1, pre_compute=False).mentions
+
         with open(
             pathlib.Path(__file__).parent.joinpath("wiki_fb15k237_test/0.json"),
             encoding="utf-8",
@@ -43,10 +47,29 @@ class WikiFb15k237Test:
 
     def __iter__(self):
         for document in self.dataset:
-            yield document["sentence"].replace(" |", "")
+            sentence = document["sentence"]
+            try:
+                for i, entity in enumerate(sentence.split("|")):
+                    if (i + 1) % 2 == 0:
+                        entity = entity.strip()
+                        sentence = sentence.replace(entity, self.mentions[entity])
+            except:
+                pass
+            yield sentence.replace(" |", "")
 
     def __getitem__(self, idx):
-        return self.dataset[idx]
+        document = self.dataset[idx]
+        try:
+            for i, entity in enumerate(document["sentence"].split("|")):
+                if (i + 1) % 2 == 0:
+                    entity = entity.strip()
+                    document["sentence"] = document["sentence"].replace(
+                        entity, self.mentions[entity]
+                    )
+                    document["entity"] = self.mentions[entity]
+        except:
+            pass
+        return document
 
 
 class WikiFb15k237Recall(data.DataLoader):
@@ -66,7 +89,6 @@ class WikiFb15k237Recall(data.DataLoader):
     >>> dataset = datasets.WikiFb15k237Recall(
     ...     batch_size = 10,
     ...     tokenizer = tokenizer,
-    ...     entities = kb.entities
     ... )
 
     >>> for sample in dataset:
@@ -78,22 +100,29 @@ class WikiFb15k237Recall(data.DataLoader):
     >>> sample["input_ids"].shape[0]
     10
 
-    >>> tokenizer.decode(sample["input_ids"][0])
-    '[CLS] panguraptor ( " pangu [ a chinese god ] plunderer " ) is a genus of coelophysidae theropod [MASK] known from fossils discovered in lower jurassic rocks of southern china. the type species and only known species is " panguraptor lufengensis ". [SEP] [PAD] [PAD] [PAD] [PAD]'
+    >>> tokenizer.decode(sample["input_ids"][1])
+    '[CLS] the string quartet no. 2 ( deutsch catalogue 32 ) in c major was composed by [MASK] in 1812. [SEP] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]'
+
+    >>> tokenizer.decode(sample["labels"][1])
+    '[UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] franz [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK] [UNK]'
 
     """
 
-    def __init__(self, batch_size, tokenizer, entities, n_masks=1):
+    def __init__(self, batch_size, tokenizer, n_masks=1):
+
+        kb = Fb15k237(1, pre_compute=False)
+
         super().__init__(
             dataset=KDDataset(
                 dataset=LoadFromJsonFolder(
                     folder=pathlib.Path(__file__).parent.joinpath("wiki_fb15k237_test/"),
-                    entities=entities,
+                    entities=kb.entities,
                     shuffle=False,
                 ),
                 tokenizer=tokenizer,
                 sep="|",
                 n_masks=n_masks,
+                mentions=kb.ids_to_labels,
             ),
             batch_size=batch_size,
             collate_fn=Collator(tokenizer=tokenizer),

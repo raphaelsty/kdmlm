@@ -1,8 +1,8 @@
-from hashlib import new
+import json
+import pathlib
 
 from mkb import datasets as mkb_datasets
-
-from .fb15k237one import Fb15k237One
+from transformers import DistilBertTokenizer
 
 __all__ = ["Fb15k237"]
 
@@ -18,16 +18,23 @@ class Fb15k237(mkb_datasets.Dataset):
     -------
 
     >>> from kdmlm import datasets
-    >>> from mkb import datasets as mkb_datasets
     >>> from kdmlm import utils
 
     >>> from transformers import DistilBertTokenizer, DistilBertForMaskedLM
 
     >>> kb = datasets.Fb15k237(1, pre_compute=False)
-    >>> one_token_entities = datasets.Fb15k237One(1, pre_compute=False).entities
 
-    >>> len(kb.entities) == len(mkb_datasets.Fb15k237(1, pre_compute=False).entities)
+    >>> len(kb.mentions) == len(kb.entities)
     True
+
+    >>> {v: k for k, v in kb.entities.items()}[0]
+    'Dominican Republic'
+
+    >>> kb.label(e = 0)
+    'dominican'
+
+    >>> kb.label(e = "Dominican Republic")
+    'dominican'
 
     >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
     >>> model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
@@ -35,22 +42,20 @@ class Fb15k237(mkb_datasets.Dataset):
     >>> model, tokenizer = utils.expand_bert_vocabulary(
     ...    model = model,
     ...    tokenizer = tokenizer,
-    ...    entities = {k: v for k, v in kb.entities.items() if k not in one_token_entities},
-    ...    id_to_label = kb.id_to_label,
+    ...    entities = kb.mentions.values(),
+    ...    original_entities = kb.original_mentions,
     ... )
 
     >>> n = 0
 
-    >>> for e in kb.entities:
-    ...     if len(tokenizer.tokenize(e)) == 1 and e not in one_token_entities:
+    >>> for e in kb.mentions.values():
+    ...     if len(tokenizer.tokenize(e)) == 1:
     ...         n += 1
 
     >>> n
-    11014
+    14535
 
-    Number of entities that are not part of Bert vocabulary, i.e entities with special caracters:
-    >>> len(kb.entities) - (n + len(one_token_entities))
-    26
+    >>> kb.ids_to_labels
 
     References
     ----------
@@ -61,6 +66,7 @@ class Fb15k237(mkb_datasets.Dataset):
     def __init__(
         self,
         batch_size,
+        tokenizer=DistilBertTokenizer.from_pretrained("distilbert-base-uncased"),
         classification=False,
         shuffle=True,
         pre_compute=True,
@@ -69,7 +75,13 @@ class Fb15k237(mkb_datasets.Dataset):
     ):
 
         freebase = mkb_datasets.Fb15k237(batch_size=1, pre_compute=False, num_workers=0)
-        freebase_one = Fb15k237One(1, pre_compute=False, shuffle=False)
+
+        path_mentions = pathlib.Path(__file__).parent.joinpath(
+            "mapping_entities_mentions_freebase.json"
+        )
+
+        with open(path_mentions, "r") as input_mentions:
+            mentions = json.load(input_mentions)
 
         replacements = [
             (" ", ""),
@@ -90,29 +102,56 @@ class Fb15k237(mkb_datasets.Dataset):
             (")", ""),
             ("–", ""),
             ("*", ""),
+            ("’", ""),
+            ("é", "e"),
+            ("·", ""),
+            ("ó", "o"),
+            ("ō", "o"),
+            ("ô", "o"),
+            ("ã", "a"),
+            (" ", ""),
         ]
 
-        new_entities = {}
-        for e, id in freebase.entities.items():
+        self.mentions = {}
+        self.original_mentions = {}
 
-            if e in freebase_one.entities:
-                e = self.avoid_collisions(e=e, entities=new_entities)
-                new_entities[e] = id
+        for entity, mention in mentions.items():
 
+            updated_mention = mention.lower()
+
+            if len(tokenizer.tokenize(mention)) == 1:
+                self.mentions[entity] = updated_mention
             else:
-                e = e.lower()
                 for target, replace in replacements:
-                    e = e.replace(target, replace)
+                    updated_mention = updated_mention.replace(target, replace)
 
-                e = self.avoid_collisions(e=e, entities=new_entities)
-                new_entities[e] = id
+            self.mentions[entity] = updated_mention
+            self.original_mentions[updated_mention] = mention
+
+        for entity in freebase.entities:
+
+            if entity in self.mentions:
+                continue
+
+            upated_mention = entity.lower()
+
+            if len(tokenizer.tokenize(mention)) == 1:
+                self.mentions[entity] = upated_mention
+            else:
+                for target, replace in replacements:
+                    upated_mention = upated_mention.replace(target, replace)
+
+                self.mentions[entity] = upated_mention
+                self.original_mentions[upated_mention] = mention
+
+        self.id_to_mention = {id_e: self.mentions[e] for e, id_e in freebase.entities.items()}
 
         super().__init__(
             batch_size=batch_size,
             train=freebase.train,
             valid=freebase.valid,
             test=freebase.test,
-            entities=new_entities,
+            entities=freebase.entities,
             relations=freebase.relations,
             classification=classification,
             shuffle=shuffle,
@@ -122,27 +161,12 @@ class Fb15k237(mkb_datasets.Dataset):
         )
 
     @property
-    def label_to_id(self):
-        """Mapping between mkb.Fb15k237 entities labels and kdmlm.Fb15k237 entities labels."""
-        freebase_entities = mkb_datasets.Fb15k237(
-            batch_size=1, pre_compute=False, num_workers=0
-        ).entities
-        freebase_entities = {id: label for label, id in freebase_entities.items()}
-        return {freebase_entities[id]: label for label, id in self.entities.items()}
+    def ids_to_labels(self):
+        return {id_e: self.label(id_e) for _, id_e in self.entities.items()}
 
-    @property
-    def id_to_label(self):
-        """Mapping between kdmlm.Fb15k237 and mkb entities labels."""
-        freebase_entities = mkb_datasets.Fb15k237(
-            batch_size=1, pre_compute=False, num_workers=0
-        ).entities
-        freebase_entities = {id: label for label, id in freebase_entities.items()}
-        return {label: freebase_entities[id] for label, id in self.entities.items()}
-
-    @staticmethod
-    def avoid_collisions(e, entities):
-        distinct_id = 1
-        while e in entities:
-            e += f"_{distinct_id}"
-            distinct_id += 1
-        return e
+    def label(self, e):
+        """Returns the most frequent mention for an entity."""
+        if isinstance(e, int):
+            return self.id_to_mention[e]
+        else:
+            return self.mentions[e]
