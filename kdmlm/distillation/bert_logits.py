@@ -163,8 +163,18 @@ class BertLogits:
                     ):
                         continue
 
+                    # Check if there is at least one entity we are looking for in the batch.
+                    found = False
+                    for e in sample["entity_ids"]:
+                        if e.item() in self.filter_entities:
+                            found = True
+
+                    if not found:
+                        continue
+
                     # Wether or not to compute average distributions:
                     if self.average:
+
                         for entity, logit in self._compute_logits(model=model, **sample):
                             # Filter entities
                             if entity not in self.filter_entities:
@@ -175,7 +185,9 @@ class BertLogits:
                                 average_logits[entity] = logit
                             n_distributions += 1
                             frequency[entity] += 1
+
                     else:
+
                         for entity, l, index in self._top_k(model=model, **sample):
                             # Filter entities
                             if entity not in self.filter_entities:
@@ -184,7 +196,7 @@ class BertLogits:
                             n_distributions += 1
 
                     bar.update(1)
-                    n_logits = len(logits)
+                    n_logits = len(average_logits) if self.average else len(logits)
                     bar.set_description(
                         f"Updating Bert logits, {n_distributions} distributions, {n_logits} entities."
                     )

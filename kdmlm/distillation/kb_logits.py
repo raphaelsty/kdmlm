@@ -1,6 +1,7 @@
 __all__ = ["KbLogits"]
 
 import collections
+import copy
 
 import torch
 import tqdm
@@ -60,11 +61,11 @@ class KbLogits:
 
     >>> for e in logits["harpsichord"][:5]:
     ...     print(e)
-    violin
-    cello
-    guitar
+    synthesizer
     piano
-    viola
+    bass
+    organ
+    guitar
 
     """
 
@@ -117,7 +118,7 @@ class KbLogits:
         n_distributions = 0
 
         bar = tqdm.tqdm(
-            range(min(self.n // dataset.batch_size, len(dataset.train) // dataset.batch_size)),
+            range(min(self.n, len(dataset.train) // dataset.batch_size)),
             desc=f"Updating kb logits, {n_distributions} distributions, {len(logits)} entities.",
             position=0,
         )
@@ -202,8 +203,10 @@ class KbLogits:
 
                         n_distributions += 1
 
+                n_logits = len(average_logits) if self.average else len(logits)
+
                 bar.set_description(
-                    f"Updating kb logits, {n_distributions} distributions, {len(logits)} entities."
+                    f"Updating kb logits, {n_distributions} distributions, {n_logits} entities."
                 )
 
         if self.average:
@@ -262,20 +265,20 @@ class KbLogits:
         >>> logits, index  = kb_logits._top_k(model = model, h = 2067, r = 17, t = 13044,
         ...     tensor_distillation = kb_logits.heads, mode = "head-batch")
 
-        >>> logits
-        tensor([ 2.8958,  2.3543, -2.8897, -0.6057], grad_fn=<IndexSelectBackward>)
+        >>> logits[:2]
+        tensor([2.8958, 2.3543], grad_fn=<SliceBackward>)
 
-        >>> index
-        tensor([ 8722,   976, 11999, 10242])
+        >>> index[:2]
+        tensor([8722,  976])
 
         >>> logits, index = kb_logits._top_k(model = model, h = 2067, r = 17, t = 13044,
         ...     tensor_distillation = kb_logits.tails, mode = "tail-batch")
 
-        >>> logits
-        tensor([ 2.7046,  2.5926, -1.4249,  0.2401], grad_fn=<IndexSelectBackward>)
+        >>> logits[:2]
+        tensor([2.7046, 2.5926], grad_fn=<SliceBackward>)
 
-        >>> index
-        tensor([ 2655, 13315,  6234,  3326])
+        >>> index[:2]
+        tensor([ 2655, 13315])
 
         >>> model(torch.tensor([[8722, 17, 13044]]))
         tensor([[2.8958]], grad_fn=<ViewBackward>)
