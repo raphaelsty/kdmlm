@@ -118,7 +118,7 @@ class KbLogits:
         n_distributions = 0
 
         bar = tqdm.tqdm(
-            range(min(self.n, len(dataset.train) // dataset.batch_size)),
+            range(len(dataset.train) // dataset.batch_size),
             desc=f"Updating kb logits, {n_distributions} distributions, {len(logits)} entities.",
             position=0,
         )
@@ -202,6 +202,9 @@ class KbLogits:
                             logits[t].append((score, index))
 
                         n_distributions += 1
+
+                if n_distributions > self.n:
+                    break
 
                 n_logits = len(average_logits) if self.average else len(logits)
 
