@@ -31,10 +31,10 @@ class Fb15k237(mkb_datasets.Dataset):
     'Dominican Republic'
 
     >>> kb.label(e = 0)
-    'dominican'
+    'dominicanrepublic'
 
     >>> kb.label(e = "Dominican Republic")
-    'dominican'
+    'dominicanrepublic'
 
     >>> tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
     >>> model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
@@ -53,9 +53,7 @@ class Fb15k237(mkb_datasets.Dataset):
     ...         n += 1
 
     >>> n
-    14535
-
-    >>> kb.ids_to_labels
+    14531
 
     References
     ----------
@@ -72,13 +70,18 @@ class Fb15k237(mkb_datasets.Dataset):
         pre_compute=True,
         num_workers=0,
         seed=42,
+        mention="frequent",
     ):
 
         freebase = mkb_datasets.Fb15k237(batch_size=1, pre_compute=False, num_workers=0)
 
-        path_mentions = pathlib.Path(__file__).parent.joinpath(
-            "mapping_entities_mentions_freebase.json"
+        path_mentions = (
+            "mapping_entities_frequent_mentions_freebase.json"
+            if mention == "frequent"
+            else "mapping_entities_mentions_freebase.json"
         )
+
+        path_mentions = pathlib.Path(__file__).parent.joinpath(path_mentions)
 
         with open(path_mentions, "r") as input_mentions:
             mentions = json.load(input_mentions)

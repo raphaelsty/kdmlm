@@ -360,6 +360,6 @@ class KbLogits:
                 index,
             ).to(self.device)
 
-            logits[e].append((index, score))
+            logits[e].append((score, index))
 
         return logits
