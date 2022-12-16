@@ -10,8 +10,6 @@ __all__ = ["Sample"]
 
 class Sample(LoadFromFolder):
     """Some sample pre-processed sentences from wikipedia.
-    Entities are delimited by the separator pipe.
-    Entities come from [Fb15k237](https://github.com/raphaelsty/mkb/blob/master/mkb/datasets/fb15k237.py).
 
     Example:
     --------
