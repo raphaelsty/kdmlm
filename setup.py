@@ -11,12 +11,12 @@ with open("requirements.txt") as f:
 setuptools.setup(
     name="kdmlm",
     version=f"{__version__}",
-    author="Raphael Sourty",
-    author_email="raphael.sourty@gmail.com",
-    description="Knowledge bases distilled to language models.",
+    author="",
+    author_email="",
+    description="",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/raphaelsty/kdmlm",
+    url="",
     packages=setuptools.find_packages(),
     install_requires=required,
     package_data={
